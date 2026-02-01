@@ -81,8 +81,9 @@ export class LevelManager {
 
             // Ajout aléatoire de points de spawn pour les ennemis
             // On vérifie aussi qu'on n'est pas trop proche du point de départ (0,0,0) pour éviter le spawn kill
+            // Augmentation de la distance de sécurité de 6 à 10 unités
             if (i > 2 && i < numPlatforms - 1 && Math.random() < 0.4) {
-                if (currentPos.length() > 6) { // Sécurité supplémentaire contre le spawn sur le joueur
+                if (currentPos.length() > 10) { // Sécurité supplémentaire contre le spawn sur le joueur
                     this.spawnPoints.push(currentPos.clone().add(new Vector3(0, 1, 0)));
                 }
             }

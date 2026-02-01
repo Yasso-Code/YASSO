@@ -17,18 +17,41 @@ export class DataCollector {
         
         /**
          * @property {number} threshold - Seuil d'actions avant adaptation.
+         * Augmenté à 50 pour éviter le déclenchement trop rapide.
          */
-        this.threshold = 15;
+        this.threshold = 50;
+
+        /**
+         * @property {number} lastMoveTime - Timestamp du dernier mouvement enregistré pour éviter le spam.
+         */
+        this.lastMoveTime = 0;
+    }
+
+    /**
+     * Réinitialise les données collectées (ex: nouvelle partie).
+     */
+    reset() {
+        this.data = { movements: { left: 0, right: 0, up: 0, down: 0 }, dashCount: 0 };
+        this.actionCounter = 0;
+        this.lastMoveTime = 0;
     }
 
     /**
      * Enregistre un mouvement directionnel.
+     * Ajout d'un cooldown pour éviter de compter chaque frame comme une action.
      * @param {string} dir - La direction ("left", "right", "up", "down").
      */
     recordMove(dir) {
+        const now = Date.now();
+        // On n'enregistre le mouvement que toutes les 500ms si la touche reste appuyée
+        if (now - this.lastMoveTime < 500) {
+            return;
+        }
+
         if (this.data.movements[dir] !== undefined) {
             this.data.movements[dir]++;
             this.actionCounter++;
+            this.lastMoveTime = now;
         }
     }
 

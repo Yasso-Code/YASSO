@@ -36,6 +36,10 @@ class Game {
         this.gameOverScreen = document.getElementById("game-over-screen");
 
         this.cameraOffset = new Vector3(0, 12, -12);
+        
+        // Timestamp du début de la partie pour la période de grâce
+        this.gameStartTime = 0;
+        
         this.init();
     }
 
@@ -66,6 +70,13 @@ class Game {
         this.gameState = "PLAYING";
         this.startScreen.classList.remove("active");
         this.gameOverScreen.classList.remove("active");
+        
+        // Réinitialisation de l'IA pour éviter un déclenchement immédiat
+        this.ai.reset();
+        
+        // Enregistrement du temps de départ
+        this.gameStartTime = Date.now();
+        
         this.levelManager.loadFloor(1);
         this.yasso.reset();
     }
@@ -104,8 +115,11 @@ class Game {
             }
 
             // Gestion Ennemis & Collisions
-            // Si update retourne true, c'est qu'il y a collision -> Game Over
-            if (this.entityManager.update(this.yasso, this.ai)) {
+            const collisionDetected = this.entityManager.update(this.yasso, this.ai);
+            
+            // Période de grâce : On ignore les collisions pendant 1 seconde (1000ms) après le début
+            // Cela évite les "Spawn Kills" dus à la génération aléatoire
+            if (collisionDetected && (Date.now() - this.gameStartTime > 1000)) {
                 this.triggerGameOver();
             }
 
