@@ -2,11 +2,34 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>YASSO - GOW 2026</title>
     <link rel="stylesheet" href="src/style.css">
 </head>
 <body>
     <canvas id="renderCanvas"></canvas>
+
+    <!-- Interface Utilisateur (UI) -->
+    <div id="ui-layer">
+        <!-- Écran de Démarrage -->
+        <div id="start-screen" class="screen active">
+            <h1>YASSO</h1>
+            <p>Neural Network Infiltration</p>
+            <div class="controls-hint">
+                <p>Déplacement : ZQSD | Dash : ESPACE</p>
+                <p>Zoom : W / X</p>
+            </div>
+            <p class="blink">Appuyez sur ENTRÉE pour commencer</p>
+        </div>
+
+        <!-- Écran Game Over -->
+        <div id="game-over-screen" class="screen">
+            <h1 style="color: orangered;">CRITICAL ERROR</h1>
+            <p>System Failure: YASSO.exe a cessé de fonctionner</p>
+            <p class="blink">Appuyez sur ENTRÉE pour redémarrer</p>
+        </div>
+    </div>
+
     <script type="module" src="src/main.js"></script>
 </body>
 </html>
