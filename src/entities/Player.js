@@ -1,4 +1,4 @@
-import { MeshBuilder, StandardMaterial, Color3, Vector3 } from "@babylonjs/core";
+import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray } from "@babylonjs/core";
 
 /**
  * @class Player
@@ -40,6 +40,27 @@ export class Player {
     }
 
     /**
+     * Vérifie si une position donnée est valide (sur la carte).
+     * Utilise un Raycast vertical vers le bas.
+     * @param {Vector3} targetPosition - La position à tester.
+     * @returns {boolean} True si la position est au-dessus d'une plateforme.
+     */
+    _isValidMove(targetPosition) {
+        // On lance un rayon depuis un peu au-dessus de la position cible, vers le bas
+        const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
+        const direction = new Vector3(0, -1, 0);
+        const length = 5;
+        const ray = new Ray(origin, direction, length);
+
+        // On vérifie si le rayon touche un mesh nommé "p" (plateforme) ou "exit"
+        const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
+            return mesh.name === "p" || mesh.name === "exit";
+        });
+
+        return hitInfo.hit;
+    }
+
+    /**
      * Boucle de mise à jour du joueur.
      * @param {InputManager} inputManager - Gestionnaire d'entrées.
      * @param {DataCollector} aiCollector - Collecteur de données pour l'IA.
@@ -54,10 +75,18 @@ export class Player {
         if (input.x < 0) { moveDir.x -= 1; aiCollector.recordMove("left"); }
         if (input.x > 0) { moveDir.x += 1; aiCollector.recordMove("right"); }
 
-        // Application du mouvement
+        // Application du mouvement avec vérification des limites
         if (moveDir.length() > 0) {
             moveDir.normalize();
-            this.mesh.position.addInPlace(moveDir.scale(this.speed));
+            
+            // Calcul de la future position
+            const nextPos = this.mesh.position.add(moveDir.scale(this.speed));
+            
+            // On ne bouge que si la future position est valide (sur une plateforme)
+            if (this._isValidMove(nextPos)) {
+                this.mesh.position = nextPos;
+            }
+            
             this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
         }
 
@@ -80,7 +109,15 @@ export class Player {
         // Si aucune direction n'est donnée, on dash vers l'avant du mesh ou par défaut en Z
         const dashDir = direction.length() > 0 ? direction : new Vector3(0, 0, 1);
         
-        this.mesh.position.addInPlace(dashDir.scale(dashDistance));
+        const targetPos = this.mesh.position.add(dashDir.scale(dashDistance));
+
+        // On vérifie si l'arrivée du dash est valide
+        if (this._isValidMove(targetPos)) {
+            this.mesh.position = targetPos;
+        } else {
+            // Optionnel : Feedback visuel ou sonore d'échec (ex: petit tremblement)
+            // Pour l'instant, on bloque simplement le dash s'il mène dans le vide
+        }
         
         // Cooldown
         setTimeout(() => { this.isDashReady = true; }, 800);

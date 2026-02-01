@@ -1,4 +1,4 @@
-import { MeshBuilder, StandardMaterial, Color3, Vector3 } from "@babylonjs/core";
+import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray } from "@babylonjs/core";
 
 /**
  * @class Enemy
@@ -57,15 +57,40 @@ export class Enemy {
     }
 
     /**
-     * Applique le mouvement physique au mesh.
+     * Vérifie si une position donnée est valide (sur la carte).
+     * @param {Vector3} targetPosition 
+     * @returns {boolean}
+     */
+    _isValidMove(targetPosition) {
+        const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
+        const direction = new Vector3(0, -1, 0);
+        const length = 5;
+        const ray = new Ray(origin, direction, length);
+
+        const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
+            return mesh.name === "p" || mesh.name === "exit";
+        });
+
+        return hitInfo.hit;
+    }
+
+    /**
+     * Applique le mouvement physique au mesh avec vérification des limites.
      * @private
      */
     _applyMovement() {
-        this.mesh.position.addInPlace(this.moveDirection.scale(this.speed));
+        const nextPos = this.mesh.position.add(this.moveDirection.scale(this.speed));
 
-        if (this.moveDirection.length() > 0) {
-            // Orientation vers la direction du mouvement
-            this.mesh.rotation.y = Math.atan2(this.moveDirection.x, this.moveDirection.z);
+        if (this._isValidMove(nextPos)) {
+            this.mesh.position = nextPos;
+
+            if (this.moveDirection.length() > 0) {
+                // Orientation vers la direction du mouvement
+                this.mesh.rotation.y = Math.atan2(this.moveDirection.x, this.moveDirection.z);
+            }
+        } else {
+            // Si l'ennemi va tomber dans le vide, il change immédiatement de direction
+            this.changeDirection();
         }
     }
 
