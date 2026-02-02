@@ -1,65 +1,65 @@
 /**
  * @class InputManager
- * @description Gère les entrées clavier de l'utilisateur.
- * Agit comme une couche d'abstraction pour les événements DOM (SRP).
- * Fournit des méthodes de haut niveau pour les actions de jeu (Abstraction).
+ * @description Gère les entrées WASD pour le mouvement et Q/E pour le zoom.
  */
 export class InputManager {
     constructor() {
-        /**
-         * @property {Object} inputMap - Carte de l'état actuel des touches (appuyées ou non).
-         */
-        this.inputMap = {};
-        
-        // Utilisation de fonctions fléchées pour préserver le contexte 'this'
-        window.addEventListener("keydown", (e) => this.inputMap[e.key.toLowerCase()] = true);
-        window.addEventListener("keyup", (e) => this.inputMap[e.key.toLowerCase()] = false);
+        this.keys = {
+            forward: false,  // W
+            left: false,     // A
+            backward: false, // S
+            right: false,    // D
+            dash: false,     // Space
+            zoomIn: false,   // Q (Changé pour éviter conflit avec W)
+            zoomOut: false   // E (Plus intuitif à côté de Q)
+        };
+        this._initListeners();
+    }
+
+    _initListeners() {
+        window.addEventListener("keydown", (e) => {
+            this._handleKey(e.key.toLowerCase(), true);
+        });
+
+        window.addEventListener("keyup", (e) => {
+            this._handleKey(e.key.toLowerCase(), false);
+        });
+    }
+
+    _handleKey(key, isPressed) {
+        switch (key) {
+            case "w": this.keys.forward = isPressed; break;
+            case "a": this.keys.left = isPressed; break;
+            case "s": this.keys.backward = isPressed; break;
+            case "d": this.keys.right = isPressed; break;
+            case " ": this.keys.dash = isPressed; break;
+            case "q": this.keys.zoomIn = isPressed; break; 
+            case "e": this.keys.zoomOut = isPressed; break;
+        }
     }
 
     /**
-     * Vérifie si une touche spécifique est actuellement enfoncée.
-     * @param {string} key - La touche à vérifier (en minuscule).
-     * @returns {boolean} True si la touche est enfoncée.
-     */
-    isPressed(key) {
-        return !!this.inputMap[key];
-    }
-
-    /**
-     * Récupère le vecteur de direction basé sur les entrées (ZQSD).
-     * @returns {{x: number, z: number}} Vecteur de direction brut.
-     */
-    getMovementInput() {
-        let x = 0;
-        let z = 0;
-        if (this.isPressed("z")) z += 1;
-        if (this.isPressed("s")) z -= 1;
-        if (this.isPressed("q")) x -= 1;
-        if (this.isPressed("d")) x += 1;
-        return { x, z };
-    }
-
-    /**
-     * Vérifie si l'action de Dash est demandée.
-     * @returns {boolean}
-     */
-    isDashTriggered() {
-        return this.isPressed(" ");
-    }
-
-    /**
-     * Vérifie si l'action de Zoom In est demandée.
-     * @returns {boolean}
+     * Méthodes appelées par main.js pour corriger l'erreur TypeError
      */
     isZoomInTriggered() {
-        return this.isPressed("w");
+        return this.keys.zoomIn;
+    }
+
+    isZoomOutTriggered() {
+        return this.keys.zoomOut;
+    }
+
+    isDashTriggered() {
+        return this.keys.dash;
     }
 
     /**
-     * Vérifie si l'action de Zoom Out est demandée.
-     * @returns {boolean}
+     * Retourne les directions brutes pour le Player.js
      */
-    isZoomOutTriggered() {
-        return this.isPressed("x");
+    getMovementInput() {
+        return {
+            x: (this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0),
+            z: (this.keys.forward ? 1 : 0) - (this.keys.backward ? 1 : 0)
+        };
     }
 }

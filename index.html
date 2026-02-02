@@ -1,11 +1,13 @@
 <!doctype html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>YASSO - GOW 2026</title>
     <link rel="stylesheet" href="src/style.css">
 </head>
+
 <body>
     <canvas id="renderCanvas"></canvas>
 
@@ -16,8 +18,8 @@
             <h1>YASSO</h1>
             <p>Neural Network Infiltration</p>
             <div class="controls-hint">
-                <p>Déplacement : ZQSD | Dash : ESPACE</p>
-                <p>Zoom : W / X</p>
+                <p>Déplacement : WASD | Dash : ESPACE</p>
+                <p>Zoom : Q / E</p>
             </div>
             <p class="blink">Appuyez sur ENTRÉE pour commencer</p>
         </div>
@@ -28,8 +30,23 @@
             <p>System Failure: YASSO.exe a cessé de fonctionner</p>
             <p class="blink">Appuyez sur ENTRÉE pour redémarrer</p>
         </div>
+
+        <div id="nexus-hud"
+            style="position: absolute; top: 20px; left: 20px; font-family: 'Courier New', monospace; color: #00ffff; pointer-events: none; display: none;">
+            <div style="font-size: 14px; letter-spacing: 2px;">> ANALYSE SYSTEME : <span id="nexus-status">STABLE</span>
+            </div>
+            <div
+                style="width: 250px; height: 10px; border: 1px solid #00ffff; margin-top: 5px; background: rgba(0, 255, 255, 0.1);">
+                <div id="nexus-bar-fill"
+                    style="width: 0%; height: 100%; background: #00ffff; box-shadow: 0 0 10px #00ffff;"></div>
+            </div>
+            <div id="nexus-pattern"
+                style="font-size: 11px; margin-top: 5px; color: #ff00ff; text-transform: uppercase;">Pattern :
+                recherche...</div>
+        </div>
     </div>
 
     <script type="module" src="src/main.js"></script>
 </body>
+
 </html>
