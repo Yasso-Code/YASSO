@@ -28,13 +28,13 @@ export class InputManager {
 
     _handleKey(key, isPressed) {
         switch (key) {
-            case "w": this.keys.forward = isPressed; break;
-            case "a": this.keys.left = isPressed; break;
+            case "z": this.keys.forward = isPressed; break;
+            case "q": this.keys.left = isPressed; break;
             case "s": this.keys.backward = isPressed; break;
             case "d": this.keys.right = isPressed; break;
             case " ": this.keys.dash = isPressed; break;
-            case "q": this.keys.zoomIn = isPressed; break; 
-            case "e": this.keys.zoomOut = isPressed; break;
+            case "w": this.keys.zoomIn = isPressed; break;
+            case "x": this.keys.zoomOut = isPressed; break;
         }
     }
 
