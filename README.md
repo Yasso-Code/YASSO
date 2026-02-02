@@ -10,3 +10,10 @@ Projet pour le concours Games on Web (IA Edition).
 Exécutez `npm run dev` pour lancer le serveur local.
 
 À suivre pour actualiser le readme.
+
+
+pour tester
+git add .
+git commit -m "TEST: ajout fichier A"
+git push -u origin test_A
+
