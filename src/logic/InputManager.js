@@ -5,13 +5,13 @@
 export class InputManager {
     constructor() {
         this.keys = {
-            forward: false,  // W
-            left: false,     // A
+            forward: false,  // Z
+            left: false,     // Q
             backward: false, // S
             right: false,    // D
             dash: false,     // Space
-            zoomIn: false,   // Q (Changé pour éviter conflit avec W)
-            zoomOut: false   // E (Plus intuitif à côté de Q)
+            zoomIn: false,   // W
+            zoomOut: false   // X
         };
         this._initListeners();
     }

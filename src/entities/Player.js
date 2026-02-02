@@ -1,9 +1,9 @@
-import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray } from "@babylonjs/core";
+import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, Animation, CubicEase, EasingFunction } from "@babylonjs/core";
 
 /**
  * @class Player
  * @description Représente le joueur (Yasso).
- * Gère les entrées, le mouvement et les capacités spéciales (Dash).
+ * Gère les entrées, le mouvement, les collisions avec l'environnement et la mécanique de Dash offensif.
  */
 export class Player {
     /**
@@ -15,6 +15,16 @@ export class Player {
 
         this.speed = 0.18;
         this.isDashReady = true;
+        
+        /**
+         * @property {Vector3} lastMoveDirection - Mémorise la dernière direction de mouvement pour dasher même à l'arrêt.
+         */
+        this.lastMoveDirection = new Vector3(0, 0, 1);
+        
+        /**
+         * @property {boolean} isDashing - Indique si une animation de dash est en cours (bloque les inputs).
+         */
+        this.isDashing = false;
     }
 
     /**
@@ -32,27 +42,27 @@ export class Player {
     }
 
     /**
-     * Réinitialise la position du joueur (ex: changement de niveau).
+     * Réinitialise l'état du joueur (position, rotation, flags).
      */
     reset() {
         this.mesh.position = new Vector3(0, 0.8, 0);
         this.mesh.rotation = Vector3.Zero();
+        this.lastMoveDirection = new Vector3(0, 0, 1);
+        this.isDashing = false;
     }
 
     /**
-     * Vérifie si une position donnée est valide (sur la carte).
+     * Vérifie si une position cible est valide (au-dessus d'une plateforme).
      * Utilise un Raycast vertical vers le bas.
-     * @param {Vector3} targetPosition - La position à tester.
-     * @returns {boolean} True si la position est au-dessus d'une plateforme.
+     * @param {Vector3} targetPosition - La position future à tester.
+     * @returns {boolean} True si le mouvement est autorisé.
      */
     _isValidMove(targetPosition) {
-        // On lance un rayon depuis un peu au-dessus de la position cible, vers le bas
         const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
         const length = 5;
         const ray = new Ray(origin, direction, length);
 
-        // On vérifie si le rayon touche un mesh nommé "p" (plateforme) ou "exit"
         const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
             return mesh.name === "p" || mesh.name === "exit";
         });
@@ -62,27 +72,28 @@ export class Player {
 
     /**
      * Boucle de mise à jour du joueur.
+     * Gère le mouvement standard et déclenche le dash.
      * @param {InputManager} inputManager - Gestionnaire d'entrées.
      * @param {DataCollector} aiCollector - Collecteur de données pour l'IA.
      */
     update(inputManager, aiCollector) {
+        // Si on est en plein dash, on ignore les inputs de mouvement pour éviter les conflits
+        if (this.isDashing) return;
+
         let moveDir = Vector3.Zero();
         const input = inputManager.getMovementInput();
 
-        // Gestion des entrées via l'abstraction InputManager
         if (input.z > 0) { moveDir.z += 1; aiCollector.recordMove("up"); }
         if (input.z < 0) { moveDir.z -= 1; aiCollector.recordMove("down"); }
         if (input.x < 0) { moveDir.x -= 1; aiCollector.recordMove("left"); }
         if (input.x > 0) { moveDir.x += 1; aiCollector.recordMove("right"); }
 
-        // Application du mouvement avec vérification des limites
         if (moveDir.length() > 0) {
             moveDir.normalize();
-            
-            // Calcul de la future position
+            this.lastMoveDirection = moveDir.clone();
+
             const nextPos = this.mesh.position.add(moveDir.scale(this.speed));
             
-            // On ne bouge que si la future position est valide (sur une plateforme)
             if (this._isValidMove(nextPos)) {
                 this.mesh.position = nextPos;
             }
@@ -90,36 +101,75 @@ export class Player {
             this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
         }
 
-        // Gestion du Dash
         if (inputManager.isDashTriggered() && this.isDashReady) {
-            this.executeDash(moveDir, aiCollector);
+            const dashDir = moveDir.length() > 0 ? moveDir : this.lastMoveDirection;
+            this.executeDash(dashDir, aiCollector);
         }
     }
 
     /**
      * Exécute la mécanique de Dash.
+     * Comprend :
+     * 1. Raycast offensif pour détruire les ennemis sur le chemin.
+     * 2. Animation fluide de déplacement (Easing).
      * @param {Vector3} direction - Direction du dash.
      * @param {DataCollector} aiCollector - Pour enregistrer l'action.
      */
     executeDash(direction, aiCollector) {
         this.isDashReady = false;
+        this.isDashing = true; // Bloque les mouvements pendant le dash
         aiCollector.recordDash();
         
         const dashDistance = 3.0;
-        // Si aucune direction n'est donnée, on dash vers l'avant du mesh ou par défaut en Z
-        const dashDir = direction.length() > 0 ? direction : new Vector3(0, 0, 1);
+        const dashDir = direction.normalize();
         
-        const targetPos = this.mesh.position.add(dashDir.scale(dashDistance));
+        // --- LOGIQUE D'ATTAQUE (Raycast) ---
+        const attackOrigin = this.mesh.position.clone();
+        attackOrigin.y = 1; 
+        const attackRay = new Ray(attackOrigin, dashDir, dashDistance + 1);
+        
+        const hitInfo = this.scene.pickWithRay(attackRay, (mesh) => mesh.name.includes("enemy"));
 
-        // On vérifie si l'arrivée du dash est valide
-        if (this._isValidMove(targetPos)) {
-            this.mesh.position = targetPos;
-        } else {
-            // Optionnel : Feedback visuel ou sonore d'échec (ex: petit tremblement)
-            // Pour l'instant, on bloque simplement le dash s'il mène dans le vide
+        if (hitInfo.hit && hitInfo.pickedMesh) {
+            const enemyInstance = hitInfo.pickedMesh.metadata?.instance;
+            if (enemyInstance) {
+                // Petit délai pour que l'impact visuel corresponde au milieu du dash
+                setTimeout(() => enemyInstance.dispose(), 100);
+            }
         }
+        // -----------------------------------
+
+        // Calcul de la position cible
+        let targetPos = this.mesh.position.add(dashDir.scale(dashDistance));
         
-        // Cooldown
+        // Si la cible est hors map, on reste sur place (ou on s'arrête au bord)
+        if (!this._isValidMove(targetPos)) {
+            targetPos = this.mesh.position.clone(); 
+        }
+
+        // --- ANIMATION DU DASH ---
+        // On utilise une fonction d'easing pour un effet "Cubic Out" (rapide au début, lent à la fin)
+        const ease = new CubicEase();
+        ease.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
+
+        // Animation de la position (sur 20 frames à 60fps = ~0.33s)
+        Animation.CreateAndStartAnimation(
+            "dashAnim", 
+            this.mesh, 
+            "position", 
+            60, 
+            20, 
+            this.mesh.position, 
+            targetPos, 
+            Animation.ANIMATIONLOOPMODE_CONSTANT, 
+            ease,
+            () => {
+                // Callback de fin d'animation : on rend le contrôle au joueur
+                this.isDashing = false;
+            }
+        );
+        
+        // Cooldown global du dash
         setTimeout(() => { this.isDashReady = true; }, 800);
     }
 }
