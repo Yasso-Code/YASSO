@@ -18,9 +18,10 @@
             <h1>YASSO</h1>
             <p>Neural Network Infiltration</p>
             <div class="controls-hint">
-                <p>Déplacement : WASD | Dash : ESPACE</p>
-                <p>Zoom : Q / E</p>
-            </div>
+    <p>Déplacement : WASD</p>
+    <p>Combat : ESPACE (Dash à travers les ennemis)</p>
+    <p>Zoom : Q / E</p>
+</div>
             <p class="blink">Appuyez sur ENTRÉE pour commencer</p>
         </div>
 
@@ -31,8 +32,22 @@
             <p class="blink">Appuyez sur ENTRÉE pour redémarrer</p>
         </div>
 
+        <!-- ✅ HUD COMPLET -->
         <div id="nexus-hud"
             style="position: absolute; top: 20px; left: 20px; font-family: 'Courier New', monospace; color: #00ffff; pointer-events: none; display: none;">
+            
+            <!-- ✅ NOUVEAU: Barre de vie -->
+            <div style="margin-bottom: 15px;">
+                <div style="font-size: 14px; letter-spacing: 2px; margin-bottom: 5px;">
+                    > YASSO INTEGRITY : <span id="health-text">3/3</span>
+                </div>
+                <div style="width: 250px; height: 12px; border: 1px solid #00ff00; background: rgba(0, 255, 0, 0.1);">
+                    <div id="health-bar-fill"
+                        style="width: 100%; height: 100%; background: #00ff00; box-shadow: 0 0 10px #00ff00; transition: width 0.3s, background 0.3s;"></div>
+                </div>
+            </div>
+
+            <!-- Analyse IA (existant) -->
             <div style="font-size: 14px; letter-spacing: 2px;">> ANALYSE SYSTEME : <span id="nexus-status">STABLE</span>
             </div>
             <div
@@ -43,6 +58,12 @@
             <div id="nexus-pattern"
                 style="font-size: 11px; margin-top: 5px; color: #ff00ff; text-transform: uppercase;">Pattern :
                 recherche...</div>
+
+            <!-- ✅ NOUVEAU: Indicateur de dash -->
+            <div id="dash-indicator" 
+                style="font-size: 13px; margin-top: 15px; letter-spacing: 1px; font-weight: bold;">
+                ⚡ DASH READY
+            </div>
         </div>
     </div>
 

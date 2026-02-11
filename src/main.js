@@ -15,12 +15,20 @@ class Game {
         this.ai = new DataCollector();
         this.entityManager = new EntityManager(this.scene);
 
-        this.levelManager = new LevelManager(this.scene, (spawnPoints) => {
-            this.entityManager.clearAll();
-            spawnPoints.forEach(point => {
-                this.entityManager.spawnEnemy("Drone", point);
-            });
-        });
+        this.levelManager = new LevelManager(
+            this.scene, 
+            // onLevelLoaded callback
+            (spawnPoints) => {
+                this.entityManager.clearAll();
+                spawnPoints.forEach(point => {
+                    this.entityManager.spawnEnemy("Drone", point);
+                });
+            },
+            // ✅ NOUVEAU: onRoomCleared callback
+            (roomIndex) => {
+                console.log(`📊 Données collectées pour la salle ${roomIndex + 1}`);
+            }
+        );
 
         this.gameState = "START";
         this.startScreen = document.getElementById("start-screen");
@@ -71,7 +79,7 @@ class Game {
     startLoop() {
         this.scene.onBeforeRenderObservable.add(() => {
             if (this.gameState !== "PLAYING") {
-                this.updateHUD(); // Pour cacher le HUD si on n'est pas en jeu
+                this.updateHUD();
                 return;
             }
 
@@ -84,18 +92,26 @@ class Game {
                 this.camera.setTarget(this.yasso.mesh.position);
             }
 
+            // ✅ MODIFIÉ: Gestion des collisions avec système de vie
             const collisionDetected = this.entityManager.update(this.yasso, this.ai);
             
             if (collisionDetected && (Date.now() - this.gameStartTime > 1000)) {
-                this.triggerGameOver();
+                const isDead = this.yasso.takeDamage();
+                if (isDead) {
+                    this.triggerGameOver();
+                }
+            }
+
+            // ✅ NOUVEAU: Vérifier si tous les ennemis sont éliminés
+            if (this.entityManager.getEnemyCount() === 0 && this.levelManager.isRoomLocked) {
+                this.levelManager.onRoomEnemiesCleared();
             }
 
             if (this.ai.shouldAdapt()) {
                 this.levelManager.applyGlitchEffect();
-                console.warn("CRITICAL ERROR: AI ADAPTATION TRIGGERED");
+                console.warn("⚠️ CRITICAL ERROR: AI ADAPTATION TRIGGERED");
             }
 
-            // MISE À JOUR DU HUD À CHAQUE FRAME
             this.updateHUD();
         });
 
@@ -112,19 +128,26 @@ class Game {
         }
     }
 
-    // Méthode de classe (syntaxe corrigée)
+    /**
+     * ✅ MODIFIÉ: Mise à jour du HUD complet
+     */
     updateHUD() {
         const hud = document.getElementById("nexus-hud");
         const bar = document.getElementById("nexus-bar-fill");
         const status = document.getElementById("nexus-status");
         const patternText = document.getElementById("nexus-pattern");
+        
+        // ✅ NOUVEAU: Éléments de vie et dash
+        const healthBar = document.getElementById("health-bar-fill");
+        const healthText = document.getElementById("health-text");
+        const dashIndicator = document.getElementById("dash-indicator");
 
-        // Sécurité si les éléments n'existent pas encore dans le HTML
         if (!hud || !bar) return;
 
         if (this.gameState === "PLAYING") {
             hud.style.display = "block";
             
+            // Barre d'analyse IA
             const progress = (this.ai.actionCounter / this.ai.threshold) * 100;
             bar.style.width = `${Math.min(progress, 100)}%`;
 
@@ -140,6 +163,40 @@ class Game {
                 status.innerText = "STABLE";
                 status.style.color = "#00ffff";
                 patternText.innerText = "Pattern : RECHERCHE...";
+            }
+
+            // ✅ NOUVEAU: Barre de vie
+            if (healthBar && healthText) {
+                const healthData = this.yasso.getHealthData();
+                healthBar.style.width = `${healthData.percentage}%`;
+                healthText.innerText = `${healthData.current}/${healthData.max}`;
+                
+                if (healthData.current === 1) {
+                    healthBar.style.background = "#ff0000";
+                    healthBar.style.boxShadow = "0 0 10px #ff0000";
+                } else if (healthData.current === 2) {
+                    healthBar.style.background = "#ff8800";
+                    healthBar.style.boxShadow = "0 0 10px #ff8800";
+                } else {
+                    healthBar.style.background = "#00ff00";
+                    healthBar.style.boxShadow = "0 0 10px #00ff00";
+                }
+            }
+
+            // ✅ NOUVEAU: Indicateur de dash
+            if (dashIndicator) {
+                const dashData = this.yasso.getDashData();
+                
+                if (dashData.isDashing) {
+                    dashIndicator.innerText = "⚡ DASHING";
+                    dashIndicator.style.color = "#ffffff";
+                } else if (dashData.isReady) {
+                    dashIndicator.innerText = "⚡ DASH READY";
+                    dashIndicator.style.color = "#00ffff";
+                } else {
+                    dashIndicator.innerText = "⏳ DASH COOLDOWN";
+                    dashIndicator.style.color = "#666666";
+                }
             }
         } else {
             hud.style.display = "none";

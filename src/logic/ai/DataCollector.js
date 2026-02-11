@@ -75,4 +75,16 @@ export class DataCollector {
         }
         return false;
     }
+
+    /**
+ * Enregistre une action spécifique (ex: dash_kill)
+ * @param {string} actionType 
+ */
+recordAction(actionType) {
+    if (actionType === "dash_kill") {
+        // On peut augmenter le compteur d'actions pour accélérer l'adaptation de l'IA
+        this.actionCounter += 5; 
+        console.log("📊 IA : Pattern d'attaque détecté (Dash Kill)");
+    }
+}
 }

@@ -1,71 +1,224 @@
 import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, ParticleSystem, Texture, Color4 } from "@babylonjs/core";
 
-/**
- * @class Enemy
- * @description Représente une entité ennemie dans le jeu.
- * Gère sa propre représentation graphique, son comportement de patrouille et ses effets visuels de destruction.
- */
 export class Enemy {
-    /**
-     * @param {Scene} scene - La scène BabylonJS.
-     * @param {string} type - Le type d'ennemi (ex: "Drone").
-     * @param {Vector3} [startPosition] - Position de départ optionnelle.
-     */
     constructor(scene, type, startPosition) {
         this.scene = scene;
         this.type = type;
         this.isDestroyed = false;
 
-        // Initialisation de la représentation graphique (Presentation)
         this._initMesh(startPosition);
-
-        // Propriétés de mouvement (Logic)
-        this.speed = 0.06;
-        this.moveDirection = Vector3.Zero();
-        this.moveTimer = 0;
+        this._initBehavior();
     }
 
-    /**
-     * Initialise le mesh et le matériel de l'ennemi.
-     * Attache l'instance actuelle aux métadonnées du mesh pour le Raycasting.
-     * @private
-     * @param {Vector3} startPosition 
-     */
     _initMesh(startPosition) {
-        this.mesh = MeshBuilder.CreateSphere("enemy_" + this.type, { diameter: 1 }, this.scene);
+        // Forme selon le type
+        if (this.type === "Traqueur") {
+            this.mesh = MeshBuilder.CreateSphere("enemy_traqueur", { diameter: 1 }, this.scene);
+        } else if (this.type === "Sentinelle") {
+            this.mesh = MeshBuilder.CreateBox("enemy_sentinelle", { size: 1 }, this.scene);
+        } else if (this.type === "Pulse") {
+            this.mesh = MeshBuilder.CreateTorus("enemy_pulse", { diameter: 1, thickness: 0.3 }, this.scene);
+        } else {
+            this.mesh = MeshBuilder.CreateSphere("enemy_default", { diameter: 1 }, this.scene);
+        }
+        
         this.mesh.position = startPosition ? startPosition.clone() : new Vector3(5, 1, 5);
-
-        // LIEN IMPORTANT : On attache l'instance de cette classe au mesh
         this.mesh.metadata = { instance: this };
 
+        // Couleur selon le type
         const mat = new StandardMaterial("enemyMat", this.scene);
-        mat.emissiveColor = new Color3(1, 0, 0);
+        if (this.type === "Traqueur") {
+            mat.emissiveColor = new Color3(1, 0, 0); // Rouge
+        } else if (this.type === "Sentinelle") {
+            mat.emissiveColor = new Color3(1, 0.5, 0); // Orange
+        } else if (this.type === "Pulse") {
+            mat.emissiveColor = new Color3(1, 0, 1); // Magenta
+        } else {
+            mat.emissiveColor = new Color3(1, 0, 0);
+        }
         this.mesh.material = mat;
     }
 
-    /**
-     * Logique de comportement de l'ennemi (Update loop).
-     * Gère le timer de changement de direction et l'application du mouvement.
-     * @param {Player} player - Référence au joueur pour le tracking (futur).
-     */
+    _initBehavior() {
+        if (this.type === "Traqueur") {
+            // Rapide et suit le joueur
+            this.speed = 0.08;
+            this.behaviorMode = "chase";
+            this.moveTimer = 0;
+        } else if (this.type === "Sentinelle") {
+            // Lent, reste sur place, tire
+            this.speed = 0.02;
+            this.behaviorMode = "stationary";
+            this.moveTimer = 0;
+            this.shootTimer = 0;
+            this.shootCooldown = 120; // 2 secondes
+        } else if (this.type === "Pulse") {
+            // Vitesse moyenne, pose des mines
+            this.speed = 0.05;
+            this.behaviorMode = "wander";
+            this.moveDirection = Vector3.Zero();
+            this.moveTimer = 0;
+            this.mineTimer = 0;
+            this.mineCooldown = 180; // 3 secondes
+        } else {
+            this.speed = 0.06;
+            this.behaviorMode = "wander";
+            this.moveDirection = Vector3.Zero();
+            this.moveTimer = 0;
+        }
+    }
+
     think(player) {
         if (this.isDestroyed) return;
 
+        if (this.type === "Traqueur") {
+            this._thinkTraqueur(player);
+        } else if (this.type === "Sentinelle") {
+            this._thinkSentinelle(player);
+        } else if (this.type === "Pulse") {
+            this._thinkPulse(player);
+        } else {
+            this._thinkDefault(player);
+        }
+    }
+
+    _thinkTraqueur(player) {
+        // Poursuit directement le joueur
+        if (player.mesh) {
+            const direction = player.mesh.position.subtract(this.mesh.position).normalize();
+            const nextPos = this.mesh.position.add(direction.scale(this.speed));
+
+            if (this._isValidMove(nextPos)) {
+                this.mesh.position = nextPos;
+                this.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+            }
+        }
+    }
+
+    _thinkSentinelle(player) {
+        // Reste immobile et tire
+        this.shootTimer--;
+        
+        if (this.shootTimer <= 0 && player.mesh) {
+            const dist = Vector3.Distance(this.mesh.position, player.mesh.position);
+            
+            // Tire si joueur dans portee
+            if (dist < 30) {
+                this._shoot(player);
+                this.shootTimer = this.shootCooldown;
+            }
+        }
+        
+        // Tourne vers le joueur
+        if (player.mesh) {
+            const direction = player.mesh.position.subtract(this.mesh.position);
+            this.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+        }
+    }
+
+    _thinkPulse(player) {
+        // Deambule et pose des mines
+        this.moveTimer--;
+        this.mineTimer--;
+        
+        if (this.moveTimer <= 0) {
+            this.changeDirection();
+            this.moveTimer = 60 + Math.random() * 60;
+        }
+        
+        // Pose une mine
+        if (this.mineTimer <= 0) {
+            this._placeMine();
+            this.mineTimer = this.mineCooldown;
+        }
+        
+        this._applyMovement();
+    }
+
+    _thinkDefault(player) {
         this.moveTimer--;
         if (this.moveTimer <= 0) {
             this.changeDirection();
             this.moveTimer = 60 + Math.random() * 60;
         }
-
         this._applyMovement();
     }
 
-    /**
-     * Vérifie si une position donnée est valide (sur la carte).
-     * Utilise un Raycast vertical pour détecter le sol.
-     * @param {Vector3} targetPosition - La position cible à tester.
-     * @returns {boolean} True si le sol est détecté.
-     */
+    _shoot(player) {
+        // Effet visuel de tir (projectile simple)
+        const projectile = MeshBuilder.CreateSphere("projectile", { diameter: 0.3 }, this.scene);
+        projectile.position = this.mesh.position.clone().add(new Vector3(0, 0.5, 0));
+        
+        const mat = new StandardMaterial("projMat", this.scene);
+        mat.emissiveColor = new Color3(1, 0.5, 0);
+        projectile.material = mat;
+        
+        const direction = player.mesh.position.subtract(this.mesh.position).normalize();
+        const speed = 0.2;
+        
+        // Animation du projectile
+        let life = 100;
+        const moveProjectile = () => {
+            if (life <= 0 || projectile.isDisposed()) {
+                projectile.dispose();
+                this.scene.unregisterBeforeRender(moveProjectile);
+                return;
+            }
+            
+            projectile.position.addInPlace(direction.scale(speed));
+            life--;
+            
+            // Collision avec joueur (gere par EntityManager)
+            if (player.mesh && projectile.intersectsMesh(player.mesh, false)) {
+                projectile.dispose();
+                this.scene.unregisterBeforeRender(moveProjectile);
+            }
+        };
+        
+        this.scene.registerBeforeRender(moveProjectile);
+        
+        console.log("Sentinelle tire!");
+    }
+
+    _placeMine() {
+        // Pose une mine au sol
+        const mine = MeshBuilder.CreateCylinder("mine", { 
+            height: 0.2, diameter: 1 
+        }, this.scene);
+        mine.position = this.mesh.position.clone();
+        mine.position.y = 0.1;
+        
+        const mat = new StandardMaterial("mineMat", this.scene);
+        mat.emissiveColor = new Color3(1, 0, 1);
+        mat.alpha = 0.6;
+        mine.material = mat;
+        
+        mine.metadata = { isMine: true, timer: 300 }; // 5 secondes
+        
+        // Animation de pulsation
+        let alpha = 0.6;
+        const pulsate = () => {
+            if (!mine || mine.isDisposed()) {
+                this.scene.unregisterBeforeRender(pulsate);
+                return;
+            }
+            
+            mine.metadata.timer--;
+            alpha = 0.3 + Math.sin(Date.now() * 0.01) * 0.3;
+            mine.material.alpha = alpha;
+            
+            // Explose apres timer
+            if (mine.metadata.timer <= 0) {
+                mine.dispose();
+                this.scene.unregisterBeforeRender(pulsate);
+            }
+        };
+        
+        this.scene.registerBeforeRender(pulsate);
+        
+        console.log("Pulse pose une mine!");
+    }
+
     _isValidMove(targetPosition) {
         const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
@@ -73,17 +226,12 @@ export class Enemy {
         const ray = new Ray(origin, direction, length);
 
         const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
-            return mesh.name === "p" || mesh.name === "exit";
+            return mesh.name === "p" || mesh.name === "exit" || mesh.name.includes("portal");
         });
 
         return hitInfo.hit;
     }
 
-    /**
-     * Applique le mouvement physique au mesh avec vérification des limites.
-     * Si le mouvement mène au vide, l'ennemi change de direction.
-     * @private
-     */
     _applyMovement() {
         const nextPos = this.mesh.position.add(this.moveDirection.scale(this.speed));
 
@@ -98,70 +246,56 @@ export class Enemy {
         }
     }
 
-    /**
-     * Change la direction de mouvement de manière aléatoire.
-     */
     changeDirection() {
         const x = Math.random() - 0.5;
         const z = Math.random() - 0.5;
         this.moveDirection = new Vector3(x, 0, z).normalize();
     }
 
-    /**
-     * Crée et joue une animation d'explosion de particules.
-     * Utilise le ParticleSystem de BabylonJS.
-     * @private
-     */
     _playExplosionEffect() {
-        // Création du système de particules
-        const particleSystem = new ParticleSystem("explosion", 100, this.scene);
+        const particleSystem = new ParticleSystem("explosion", 50, this.scene);
         
-        // Utilisation d'une texture par défaut (flare)
         particleSystem.particleTexture = new Texture("https://assets.babylonjs.com/textures/flare.png", this.scene);
-        
-        // Position de l'émetteur (là où l'ennemi est mort)
         particleSystem.emitter = this.mesh.position.clone();
 
-        // Couleurs (Rouge vers Orange vers Transparent)
-        particleSystem.color1 = new Color4(1, 0, 0, 1.0);
-        particleSystem.color2 = new Color4(1, 0.5, 0, 1.0);
+        // Couleur selon type
+        if (this.type === "Traqueur") {
+            particleSystem.color1 = new Color4(1, 0, 0, 1.0);
+            particleSystem.color2 = new Color4(1, 0.3, 0, 0.8);
+        } else if (this.type === "Sentinelle") {
+            particleSystem.color1 = new Color4(1, 0.5, 0, 1.0);
+            particleSystem.color2 = new Color4(1, 0.7, 0, 0.8);
+        } else if (this.type === "Pulse") {
+            particleSystem.color1 = new Color4(1, 0, 1, 1.0);
+            particleSystem.color2 = new Color4(0.8, 0, 0.8, 0.8);
+        }
+        
         particleSystem.colorDead = new Color4(0, 0, 0, 0.0);
 
-        // Taille des particules
         particleSystem.minSize = 0.1;
-        particleSystem.maxSize = 0.5;
-
-        // Durée de vie des particules
-        particleSystem.minLifeTime = 0.2;
-        particleSystem.maxLifeTime = 0.6;
-
-        // Vitesse d'émission
-        particleSystem.emitRate = 1000;
-        particleSystem.targetStopDuration = 0.1; // S'arrête après 0.1s
-
-        // Puissance de l'explosion
-        particleSystem.minEmitPower = 1;
-        particleSystem.maxEmitPower = 5;
-        particleSystem.updateSpeed = 0.02;
+        particleSystem.maxSize = 0.3;
+        particleSystem.minLifeTime = 0.1;
+        particleSystem.maxLifeTime = 0.3;
+        particleSystem.emitRate = 500;
+        particleSystem.targetStopDuration = 0.05;
+        particleSystem.minEmitPower = 0.5;
+        particleSystem.maxEmitPower = 2;
+        particleSystem.updateSpeed = 0.01;
+        particleSystem.gravity = new Vector3(0, -2, 0);
 
         particleSystem.start();
 
-        // Nettoyage du système de particules après l'animation
         setTimeout(() => {
+            particleSystem.stop();
             particleSystem.dispose();
-        }, 1000);
+        }, 400);
     }
 
-    /**
-     * Détruit l'ennemi.
-     * Déclenche l'effet visuel d'explosion et supprime le mesh de la scène.
-     */
     dispose() {
         if (this.isDestroyed) return;
         
         this.isDestroyed = true;
         
-        // Jouer l'effet visuel
         if (this.mesh) {
             this._playExplosionEffect();
             this.mesh.dispose();

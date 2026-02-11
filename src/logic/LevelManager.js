@@ -1,37 +1,27 @@
-import { MeshBuilder, StandardMaterial, Color3, HemisphericLight, Vector3, Scene } from "@babylonjs/core";
+import { MeshBuilder, StandardMaterial, Color3, HemisphericLight, Vector3, Scene, Animation } from "@babylonjs/core";
 
-/**
- * @class LevelManager
- * @description Gère la génération procédurale des niveaux, l'environnement global et la progression.
- */
 export class LevelManager {
-    /**
-     * @param {Scene} scene - La scène BabylonJS.
-     * @param {Function} onLevelLoaded - Callback appelé quand un niveau est prêt (pour spawner les ennemis).
-     */
-    constructor(scene, onLevelLoaded) {
+    constructor(scene, onLevelLoaded, onRoomCleared) {
         this.scene = scene;
         this.onLevelLoaded = onLevelLoaded;
+        this.onRoomCleared = onRoomCleared;
         this.currentFloor = 0;
+        this.currentRoomIndex = 0;
         this.envNodes = [];
-        this.spawnPoints = [];
-        
-        /**
-         * Configuration des étages (Thèmes).
-         * Respecte le principe OCP : on peut ajouter des configs sans casser le reste.
-         */
+        this.portals = [];
+        this.exitTrigger = null;
+        this.isRoomLocked = true;
+        this._currentFloorConfig = null;
+
         this.floorConfigs = [
-            { name: "Entry Point", color: new Color3(0.1, 0.1, 0.5) },
-            { name: "Data Stream", color: new Color3(0.2, 0.5, 0.2) },
-            { name: "Firewall Layer", color: new Color3(0.8, 0.2, 0.1) },
-            { name: "Neural Core", color: new Color3(0.5, 0.0, 0.8) },
-            { name: "NEXUS Root", color: new Color3(0.9, 0.9, 0.9) }
+            { name: "Interface", color: new Color3(0.1, 0.1, 0.5), rooms: 3, roomType: "simple", enemyType: "Traqueur" },
+            { name: "Pare-feu", color: new Color3(0.8, 0.2, 0.1), rooms: 4, roomType: "corridor", enemyType: "Sentinelle" },
+            { name: "Buffer", color: new Color3(0.2, 0.5, 0.2), rooms: 3, roomType: "open", enemyType: "Pulse" },
+            { name: "Noyau", color: new Color3(0.5, 0.0, 0.8), rooms: 4, roomType: "complex", enemyType: "Mix" },
+            { name: "Nexus", color: new Color3(0.9, 0.9, 0.9), rooms: 1, roomType: "arena", enemyType: "NEXUS" }
         ];
     }
 
-    /**
-     * Initialise l'éclairage et le brouillard global.
-     */
     initGlobalEnvironment() {
         this.light = new HemisphericLight("simLight", new Vector3(0, 1, 0), this.scene);
         this.light.intensity = 0.5;
@@ -40,121 +30,309 @@ export class LevelManager {
         this.scene.fogDensity = 0.03;
     }
 
-    /**
-     * Charge un étage spécifique.
-     * @param {number} floorNumber - Le numéro de l'étage (1-based).
-     */
-    loadFloor(floorNumber) {
+    loadFloor(floorNumber, aiData) {
         this.currentFloor = floorNumber;
-        // Protection contre l'index hors limites
-        const configIndex = Math.min(floorNumber - 1, this.floorConfigs.length - 1);
-        const config = this.floorConfigs[configIndex];
+        this.currentRoomIndex = 0;
+        this._currentFloorConfig = this.floorConfigs[Math.min(floorNumber - 1, 4)];
         
-        this.clearCurrentLevel();
-        this.createProceduralLevel(config);
-        
-        if (this.onLevelLoaded) this.onLevelLoaded(this.spawnPoints);
+        console.log(`\nETAGE ${floorNumber}: ${this._currentFloorConfig.name.toUpperCase()}`);
+        this.loadRoom(0, aiData);
     }
 
-    /**
-     * Génère la géométrie du niveau de manière procédurale.
-     * @param {Object} config - La configuration visuelle de l'étage.
-     */
-    createProceduralLevel(config) {
-        const numPlatforms = 8 + this.currentFloor * 4;
-        let currentPos = new Vector3(0, 0, 0);
-        this.spawnPoints = [];
+    loadRoom(roomIndex, aiData) {
+        this.clearCurrentRoom();
+        this.isRoomLocked = true;
+        this.currentRoomIndex = roomIndex;
+        const config = this._currentFloorConfig;
 
-        this.createPlatform(currentPos, config);
+        console.log(`Salle ${roomIndex + 1}/${config.rooms} - Type: ${config.roomType}`);
 
-        for (let i = 0; i < numPlatforms; i++) {
-            const dir = Math.floor(Math.random() * 4);
-            const gap = 4;
+        let roomData;
+        switch (config.roomType) {
+            case "simple": roomData = this.generateSimpleRoom(roomIndex, aiData); break;
+            case "corridor": roomData = this.generateCorridorRoom(roomIndex, aiData); break;
+            case "open": roomData = this.generateOpenRoom(roomIndex, aiData); break;
+            case "complex": roomData = this.generateComplexRoom(roomIndex, aiData); break;
+            case "arena": roomData = this.generateArenaRoom(roomIndex, aiData); break;
+            default: roomData = this.generateSimpleRoom(roomIndex, aiData);
+        }
+
+        this.createRoomVisuals(roomData, config);
+
+        const lastPlatform = roomData.platforms[roomData.platforms.length - 1];
+        if (roomIndex < config.rooms - 1) {
+            this.createPortal(lastPlatform, roomIndex + 1);
+        } else {
+            this.createExitDoor(lastPlatform);
+        }
+
+        if (this.onLevelLoaded) {
+            this.onLevelLoaded(roomData.spawnPoints, config.enemyType);
+        }
+    }
+
+    createRoomVisuals(roomData, config) {
+        roomData.platforms.forEach(pos => {
+            // FIX CRITIQUE: Nom "p" pour que _isValidMove() fonctionne
+            const p = MeshBuilder.CreateGround("p", { width: 4, height: 4 }, this.scene);
+            p.position = pos.clone();
+            const mat = new StandardMaterial("pMat", this.scene);
+            mat.wireframe = true;
+            mat.emissiveColor = config.color;
+            p.material = mat;
+            this.envNodes.push(p);
+        });
+    }
+
+    createPortal(pos, nextRoomIndex) {
+        const portal = MeshBuilder.CreateBox(`portal_${nextRoomIndex}`, { 
+            width: 3, height: 4, depth: 0.5 
+        }, this.scene);
+        portal.position = pos.clone().add(new Vector3(0, 2, 0));
+        
+        const core = MeshBuilder.CreatePlane(`core_${nextRoomIndex}`, { 
+            width: 2.2, height: 3.5 
+        }, this.scene);
+        core.parent = portal;
+        core.position = new Vector3(0, 0, -0.26);
+
+        const frameMat = new StandardMaterial("frameMat", this.scene);
+        frameMat.emissiveColor = new Color3(0.1, 0.1, 0.1);
+        portal.material = frameMat;
+
+        const coreMat = new StandardMaterial("coreMat", this.scene);
+        coreMat.emissiveColor = new Color3(0.5, 0, 1);
+        coreMat.alpha = 0;
+        core.material = coreMat;
+
+        portal.metadata = { isPortal: true, nextRoomIndex, isLocked: true, coreMesh: core };
+        portal.isVisible = false;
+        core.isVisible = false;
+
+        this.envNodes.push(portal);
+        this.portals.push(portal);
+    }
+
+    onRoomEnemiesCleared() {
+        if (this.isRoomLocked) {
+            this.isRoomLocked = false;
+            console.log(`\nSALLE ${this.currentRoomIndex + 1} COMPLETE`);
             
-            // Algorithme simple de "Random Walk"
-            if (dir === 0) currentPos.z += gap;
-            else if (dir === 1) currentPos.z -= gap;
-            else if (dir === 2) currentPos.x -= gap;
-            else currentPos.x += gap;
+            if (this.currentRoomIndex < this._currentFloorConfig.rooms - 1) {
+                this.portals.forEach(portal => {
+                    portal.isVisible = true;
+                    portal.metadata.isLocked = false;
+                    const core = portal.metadata.coreMesh;
+                    core.isVisible = true;
+                    Animation.CreateAndStartAnimation("portalAppear", core.material, "alpha", 30, 60, 0, 0.8, 0);
+                });
+                console.log("PORTAIL OUVERT\n");
+            } else {
+                console.log("PORTE DE SORTIE ACCESSIBLE\n");
+            }
+            
+            if (this.onRoomCleared) {
+                this.onRoomCleared(this.currentRoomIndex);
+            }
+        }
+    }
 
-            this.createPlatform(currentPos, config);
+    checkPortalInteraction(player) {
+        for (const portal of this.portals) {
+            if (!portal.metadata.isLocked && player.mesh.intersectsMesh(portal, false)) {
+                this.applyGlitchEffect();
+                this.loadRoom(portal.metadata.nextRoomIndex);
+                player.mesh.position = new Vector3(0, 0.8, 0);
+                return true;
+            }
+        }
+        return false;
+    }
 
-            // Ajout aléatoire de points de spawn pour les ennemis
-            // On vérifie aussi qu'on n'est pas trop proche du point de départ (0,0,0) pour éviter le spawn kill
-            // Augmentation de la distance de sécurité de 6 à 10 unités
-            if (i > 2 && i < numPlatforms - 1 && Math.random() < 0.4) {
-                if (currentPos.length() > 10) { // Sécurité supplémentaire contre le spawn sur le joueur
-                    this.spawnPoints.push(currentPos.clone().add(new Vector3(0, 1, 0)));
+    // Generateurs avec variation par salle ET analyse IA
+    generateSimpleRoom(roomIndex, aiData) {
+        const platforms = [];
+        const spawnPoints = [];
+        
+        // TOUJOURS spawn
+        platforms.push(new Vector3(0, 0, 0));
+        
+        // Taille varie par salle + IA
+        const baseSize = 5;
+        const sizeVariation = roomIndex; // Salle 1: 5x5, Salle 2: 6x6, Salle 3: 7x7
+        const gridSize = baseSize + sizeVariation;
+        
+        // Difficulte selon IA
+        const holeChance = aiData && aiData.dashCount > 10 ? 0.25 : 0.15;
+        
+        for (let x = 0; x < gridSize; x++) {
+            for (let z = 0; z < gridSize; z++) {
+                if (x === 0 && z === 0) continue;
+                if (Math.random() > holeChance) {
+                    const pos = new Vector3(x * 4, 0, z * 4);
+                    platforms.push(pos);
+                    
+                    // Spawn ennemis loin du spawn
+                    if (x > 2 && z > 2 && Math.random() < 0.2) {
+                        spawnPoints.push(pos.clone().add(new Vector3(0, 1, 0)));
+                    }
                 }
             }
         }
-        this.createExitDoor(currentPos);
+        
+        console.log(`  -> Grille ${gridSize}x${gridSize}, Trous: ${Math.floor(holeChance*100)}%`);
+        return { platforms, spawnPoints };
     }
 
-    /**
-     * Crée une plateforme individuelle.
-     * @param {Vector3} pos - Position de la plateforme.
-     * @param {Object} config - Configuration (couleur).
-     */
-    createPlatform(pos, config) {
-        const p = MeshBuilder.CreateGround("p", { width: 4, height: 4 }, this.scene);
-        p.position = pos.clone();
-        const mat = new StandardMaterial("pMat", this.scene);
-        mat.wireframe = true;
-        mat.emissiveColor = config.color;
-        p.material = mat;
-        this.envNodes.push(p);
+    generateCorridorRoom(roomIndex, aiData) {
+        const platforms = [];
+        const spawnPoints = [];
+        
+        platforms.push(new Vector3(0, 0, 0));
+        
+        // Longueur varie par salle
+        const corridorLength = 10 + (roomIndex * 2); // Salle 1: 10, Salle 2: 12, etc.
+        const corridorWidth = 2 + Math.floor(roomIndex / 2); // Elargit progressivement
+        
+        for (let z = 0; z < corridorLength; z++) {
+            for (let x = 0; x < corridorWidth; x++) {
+                if (x === 0 && z === 0) continue;
+                const pos = new Vector3(x * 4, 0, z * 4);
+                platforms.push(pos);
+                
+                // Sentinelles au milieu et fin
+                if ((z === Math.floor(corridorLength / 2) || z === corridorLength - 2) && x === 0) {
+                    spawnPoints.push(pos.clone().add(new Vector3(0, 1, 0)));
+                }
+            }
+        }
+        
+        console.log(`  -> Couloir ${corridorWidth}x${corridorLength}`);
+        return { platforms, spawnPoints };
     }
 
-    /**
-     * Crée la porte de sortie du niveau.
-     * @param {Vector3} pos - Position de la porte.
-     */
+    generateOpenRoom(roomIndex, aiData) {
+        const platforms = [];
+        const spawnPoints = [];
+        
+        platforms.push(new Vector3(0, 0, 0));
+        
+        // Taille augmente
+        const roomSize = 7 + roomIndex;
+        
+        // Obstacle central varie
+        const obstacleSize = 2 + Math.floor(roomIndex / 2);
+        const obsStart = Math.floor((roomSize - obstacleSize) / 2);
+        const obsEnd = obsStart + obstacleSize;
+        
+        for (let x = 0; x < roomSize; x++) {
+            for (let z = 0; z < roomSize; z++) {
+                if (x === 0 && z === 0) continue;
+                
+                // Obstacle central
+                if (x >= obsStart && x < obsEnd && z >= obsStart && z < obsEnd) continue;
+                
+                const pos = new Vector3(x * 4, 0, z * 4);
+                platforms.push(pos);
+                
+                // Pulses aux 4 coins
+                if ((x < 2 || x > roomSize - 3) && (z < 2 || z > roomSize - 3) && Math.random() < 0.3) {
+                    spawnPoints.push(pos.clone().add(new Vector3(0, 1, 0)));
+                }
+            }
+        }
+        
+        console.log(`  -> Salle ${roomSize}x${roomSize}, Obstacle ${obstacleSize}x${obstacleSize}`);
+        return { platforms, spawnPoints };
+    }
+
+    generateComplexRoom(roomIndex, aiData) {
+        const platforms = [];
+        const spawnPoints = [];
+        let currentPos = new Vector3(0, 0, 0);
+        
+        // Longueur varie
+        const pathLength = 25 + (roomIndex * 5);
+        
+        // Pattern change selon salle
+        const patterns = [
+            () => { currentPos[Math.random() < 0.5 ? "x" : "z"] += 4; }, // Simple
+            () => { currentPos.x += 4; currentPos.z += Math.random() < 0.5 ? 4 : -4; }, // Zigzag
+            () => { currentPos[Math.random() < 0.3 ? "x" : "z"] += Math.random() < 0.5 ? 4 : -4; } // Chaotique
+        ];
+        
+        const pattern = patterns[roomIndex % 3];
+        
+        for (let i = 0; i < pathLength; i++) {
+            platforms.push(currentPos.clone());
+            
+            if (i % 6 === 0 && i > 0) {
+                spawnPoints.push(currentPos.clone().add(new Vector3(0, 1, 0)));
+            }
+            
+            pattern();
+        }
+        
+        console.log(`  -> Chemin chaotique: ${pathLength} plateformes, Pattern: ${roomIndex % 3}`);
+        return { platforms, spawnPoints };
+    }
+
+    generateArenaRoom(roomIndex, aiData) {
+        const platforms = [];
+        const spawnPoints = [];
+        
+        // Arene toujours grande
+        const radius = 8;
+        const center = new Vector3(radius * 4, 0, radius * 4);
+        
+        for (let x = 0; x < radius * 2; x++) {
+            for (let z = 0; z < radius * 2; z++) {
+                const pos = new Vector3(x * 4, 0, z * 4);
+                const dist = Vector3.Distance(pos, center);
+                
+                if (dist < radius * 4 && dist > 3 * 4) {
+                    platforms.push(pos);
+                }
+            }
+        }
+        
+        // Boss au centre
+        spawnPoints.push(center.clone().add(new Vector3(0, 1, 0)));
+        
+        console.log(`  -> Arene circulaire, Rayon: ${radius * 4}u`);
+        return { platforms, spawnPoints };
+    }
+
     createExitDoor(pos) {
-        const door = MeshBuilder.CreateBox("exit", { width: 1.5, height: 2.5, depth: 0.2 }, this.scene);
-        door.position = pos.clone().add(new Vector3(0, 1.25, 0));
+        const door = MeshBuilder.CreateBox("exit", { width: 2, height: 3, depth: 0.3 }, this.scene);
+        door.position = pos.clone().add(new Vector3(0, 1.5, 0));
         const mat = new StandardMaterial("dMat", this.scene);
         mat.emissiveColor = new Color3(1, 1, 1);
+        mat.alpha = 0.8;
         door.material = mat;
         this.exitTrigger = door;
         this.envNodes.push(door);
     }
 
-    /**
-     * Vérifie si le joueur interagit avec la sortie.
-     * @param {Player} player - Le joueur.
-     */
     checkExitInteraction(player) {
+        this.checkPortalInteraction(player);
         if (this.exitTrigger && player.mesh.intersectsMesh(this.exitTrigger, false)) {
-            if (this.currentFloor < 5) {
-                this.loadFloor(this.currentFloor + 1);
-            } else {
-                // Victoire ou boucle (à implémenter)
-                console.log("Niveau Max Atteint");
-                this.loadFloor(1); // Boucle pour l'instant
-            }
+            const nextFloor = this.currentFloor < 5 ? this.currentFloor + 1 : 1;
+            console.log(`\nETAGE ${this.currentFloor} TERMINE!\n`);
+            this.loadFloor(nextFloor);
             player.reset();
         }
     }
 
-    /**
-     * Applique un effet visuel de "Glitch" (changement d'intensité lumineuse).
-     */
     applyGlitchEffect() {
         this.light.intensity = 2.0;
         setTimeout(() => this.light.intensity = 0.5, 100);
     }
 
-    /**
-     * Nettoie le niveau actuel.
-     */
-    clearCurrentLevel() {
+    clearCurrentRoom() {
         this.envNodes.forEach(n => n.dispose());
         this.envNodes = [];
-        this.spawnPoints = [];
-        if (this.exitTrigger) {
-            this.exitTrigger.dispose();
-            this.exitTrigger = null;
-        }
+        this.portals = [];
+        this.exitTrigger = null;
     }
 }

@@ -2,35 +2,25 @@ import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, Animation, CubicEa
 
 /**
  * @class Player
- * @description Représente le joueur (Yasso).
- * Gère les entrées, le mouvement, les collisions avec l'environnement et la mécanique de Dash offensif.
+ * @description Represente le joueur (Yasso).
  */
 export class Player {
-    /**
-     * @param {Scene} scene - La scène BabylonJS.
-     */
     constructor(scene) {
         this.scene = scene;
         this._initMesh();
 
         this.speed = 0.18;
         this.isDashReady = true;
-        
-        /**
-         * @property {Vector3} lastMoveDirection - Mémorise la dernière direction de mouvement pour dasher même à l'arrêt.
-         */
         this.lastMoveDirection = new Vector3(0, 0, 1);
-        
-        /**
-         * @property {boolean} isDashing - Indique si une animation de dash est en cours (bloque les inputs).
-         */
         this.isDashing = false;
+
+        // Systeme de vie
+        this.maxHealth = 3;
+        this.currentHealth = 3;
+        this.isInvincible = false;
+        this.invincibilityDuration = 1500;
     }
 
-    /**
-     * Initialise le mesh du joueur.
-     * @private
-     */
     _initMesh() {
         this.mesh = MeshBuilder.CreateBox("yasso_body", { width: 0.8, height: 1.6, depth: 0.4 }, this.scene);
         this.mesh.position.y = 0.8;
@@ -39,24 +29,32 @@ export class Player {
         mat.emissiveColor = new Color3(0, 1, 1);
         mat.alpha = 0.8;
         this.mesh.material = mat;
+
+        this._createDashTrail();
     }
 
-    /**
-     * Réinitialise l'état du joueur (position, rotation, flags).
-     */
+    _createDashTrail() {
+        this.trailMesh = MeshBuilder.CreateBox("trail", { width: 0.9, height: 1.7, depth: 0.5 }, this.scene);
+        this.trailMesh.parent = this.mesh;
+        this.trailMesh.position = new Vector3(0, 0, 0);
+
+        const trailMat = new StandardMaterial("trailMat", this.scene);
+        trailMat.emissiveColor = new Color3(0, 1, 1);
+        trailMat.alpha = 0;
+        trailMat.wireframe = true;
+        this.trailMesh.material = trailMat;
+    }
+
     reset() {
         this.mesh.position = new Vector3(0, 0.8, 0);
         this.mesh.rotation = Vector3.Zero();
         this.lastMoveDirection = new Vector3(0, 0, 1);
         this.isDashing = false;
+        this.currentHealth = this.maxHealth;
+        this.isInvincible = false;
+        this.mesh.material.alpha = 0.8;
     }
 
-    /**
-     * Vérifie si une position cible est valide (au-dessus d'une plateforme).
-     * Utilise un Raycast vertical vers le bas.
-     * @param {Vector3} targetPosition - La position future à tester.
-     * @returns {boolean} True si le mouvement est autorisé.
-     */
     _isValidMove(targetPosition) {
         const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
@@ -64,20 +62,13 @@ export class Player {
         const ray = new Ray(origin, direction, length);
 
         const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
-            return mesh.name === "p" || mesh.name === "exit";
+            return mesh.name === "p" || mesh.name === "exit" || mesh.name.includes("portal");
         });
 
         return hitInfo.hit;
     }
 
-    /**
-     * Boucle de mise à jour du joueur.
-     * Gère le mouvement standard et déclenche le dash.
-     * @param {InputManager} inputManager - Gestionnaire d'entrées.
-     * @param {DataCollector} aiCollector - Collecteur de données pour l'IA.
-     */
     update(inputManager, aiCollector) {
-        // Si on est en plein dash, on ignore les inputs de mouvement pour éviter les conflits
         if (this.isDashing) return;
 
         let moveDir = Vector3.Zero();
@@ -93,11 +84,11 @@ export class Player {
             this.lastMoveDirection = moveDir.clone();
 
             const nextPos = this.mesh.position.add(moveDir.scale(this.speed));
-            
+
             if (this._isValidMove(nextPos)) {
                 this.mesh.position = nextPos;
             }
-            
+
             this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
         }
 
@@ -107,69 +98,113 @@ export class Player {
         }
     }
 
-    /**
-     * Exécute la mécanique de Dash.
-     * Comprend :
-     * 1. Raycast offensif pour détruire les ennemis sur le chemin.
-     * 2. Animation fluide de déplacement (Easing).
-     * @param {Vector3} direction - Direction du dash.
-     * @param {DataCollector} aiCollector - Pour enregistrer l'action.
-     */
-    executeDash(direction, aiCollector) {
-        this.isDashReady = false;
-        this.isDashing = true; // Bloque les mouvements pendant le dash
-        aiCollector.recordDash();
-        
-        const dashDistance = 3.0;
-        const dashDir = direction.normalize();
-        
-        // --- LOGIQUE D'ATTAQUE (Raycast) ---
-        const attackOrigin = this.mesh.position.clone();
-        attackOrigin.y = 1; 
-        const attackRay = new Ray(attackOrigin, dashDir, dashDistance + 1);
-        
-        const hitInfo = this.scene.pickWithRay(attackRay, (mesh) => mesh.name.includes("enemy"));
+    takeDamage() {
+        if (this.isInvincible) return false;
 
-        if (hitInfo.hit && hitInfo.pickedMesh) {
-            const enemyInstance = hitInfo.pickedMesh.metadata?.instance;
-            if (enemyInstance) {
-                // Petit délai pour que l'impact visuel corresponde au milieu du dash
-                setTimeout(() => enemyInstance.dispose(), 100);
+        this.currentHealth--;
+        console.log(`YASSO HIT! Health: ${this.currentHealth}/${this.maxHealth}`);
+
+        if (this.currentHealth <= 0) {
+            console.log("YASSO DESTROYED");
+            return true;
+        }
+
+        this._activateInvincibility();
+        return false;
+    }
+
+    _activateInvincibility() {
+        this.isInvincible = true;
+
+        let blinkCount = 0;
+        const blinkInterval = setInterval(() => {
+            this.mesh.material.alpha = this.mesh.material.alpha === 0.8 ? 0.3 : 0.8;
+            blinkCount++;
+
+            if (blinkCount >= 10) {
+                clearInterval(blinkInterval);
+                this.mesh.material.alpha = 0.8;
+                this.isInvincible = false;
+                console.log("Invincibility ended");
             }
-        }
-        // -----------------------------------
+        }, this.invincibilityDuration / 10);
+    }
 
-        // Calcul de la position cible
+    executeDash(direction, aiCollector) {
+        if (!this.isDashReady || this.isDashing) return;
+
+        this.isDashReady = false;
+        this.isDashing = true;
+        aiCollector.recordDash();
+
+        const dashDistance = 3.5;
+        const dashDir = direction.normalize();
+
+        this._showDashTrail();
+
         let targetPos = this.mesh.position.add(dashDir.scale(dashDistance));
-        
-        // Si la cible est hors map, on reste sur place (ou on s'arrête au bord)
+
         if (!this._isValidMove(targetPos)) {
-            targetPos = this.mesh.position.clone(); 
+            targetPos = this.mesh.position.clone();
         }
 
-        // --- ANIMATION DU DASH ---
-        // On utilise une fonction d'easing pour un effet "Cubic Out" (rapide au début, lent à la fin)
         const ease = new CubicEase();
         ease.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
 
-        // Animation de la position (sur 20 frames à 60fps = ~0.33s)
         Animation.CreateAndStartAnimation(
-            "dashAnim", 
-            this.mesh, 
-            "position", 
-            60, 
-            20, 
-            this.mesh.position, 
-            targetPos, 
-            Animation.ANIMATIONLOOPMODE_CONSTANT, 
+            "dashAnim",
+            this.mesh,
+            "position",
+            60,
+            15,
+            this.mesh.position,
+            targetPos,
+            Animation.ANIMATIONLOOPMODE_CONSTANT,
             ease,
             () => {
-                // Callback de fin d'animation : on rend le contrôle au joueur
                 this.isDashing = false;
+                this._hideDashTrail();
             }
         );
-        
-        // Cooldown global du dash
+
         setTimeout(() => { this.isDashReady = true; }, 800);
+    }
+
+    _showDashTrail() {
+        if (!this.trailMesh) return;
+
+        const trailMat = this.trailMesh.material;
+        trailMat.alpha = 0.6;
+
+        Animation.CreateAndStartAnimation(
+            "trailPulse",
+            trailMat,
+            "alpha",
+            60,
+            20,
+            0.6,
+            0.1,
+            Animation.ANIMATIONLOOPMODE_CONSTANT
+        );
+    }
+
+    _hideDashTrail() {
+        if (!this.trailMesh) return;
+        this.trailMesh.material.alpha = 0;
+    }
+
+    getHealthData() {
+        return {
+            current: this.currentHealth,
+            max: this.maxHealth,
+            percentage: (this.currentHealth / this.maxHealth) * 100
+        };
+    }
+
+    getDashData() {
+        return {
+            isReady: this.isDashReady,
+            isDashing: this.isDashing
+        };
     }
 }

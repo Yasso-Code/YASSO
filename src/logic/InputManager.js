@@ -1,17 +1,18 @@
 /**
  * @class InputManager
  * @description Gère les entrées WASD pour le mouvement et Q/E pour le zoom.
+ * ✅ CORRIGÉ: Utilise WASD au lieu de ZQSD
  */
 export class InputManager {
     constructor() {
         this.keys = {
-            forward: false,  // Z
-            left: false,     // Q
+            forward: false,  // W
+            left: false,     // A
             backward: false, // S
             right: false,    // D
             dash: false,     // Space
-            zoomIn: false,   // W
-            zoomOut: false   // X
+            zoomIn: false,   // Q
+            zoomOut: false   // E
         };
         this._initListeners();
     }
@@ -28,19 +29,21 @@ export class InputManager {
 
     _handleKey(key, isPressed) {
         switch (key) {
-            case "z": this.keys.forward = isPressed; break;
-            case "q": this.keys.left = isPressed; break;
+            // ✅ WASD pour le mouvement
+            case "w": this.keys.forward = isPressed; break;
+            case "a": this.keys.left = isPressed; break;
             case "s": this.keys.backward = isPressed; break;
             case "d": this.keys.right = isPressed; break;
+            
+            // Dash
             case " ": this.keys.dash = isPressed; break;
-            case "w": this.keys.zoomIn = isPressed; break;
-            case "x": this.keys.zoomOut = isPressed; break;
+            
+            // ✅ Q/E pour le zoom
+            case "q": this.keys.zoomIn = isPressed; break;
+            case "e": this.keys.zoomOut = isPressed; break;
         }
     }
 
-    /**
-     * Méthodes appelées par main.js pour corriger l'erreur TypeError
-     */
     isZoomInTriggered() {
         return this.keys.zoomIn;
     }
@@ -53,9 +56,6 @@ export class InputManager {
         return this.keys.dash;
     }
 
-    /**
-     * Retourne les directions brutes pour le Player.js
-     */
     getMovementInput() {
         return {
             x: (this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0),
