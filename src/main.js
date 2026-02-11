@@ -1,4 +1,4 @@
-import { Engine, Scene, FreeCamera, Vector3, Color3 } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, Color3, Sound } from "@babylonjs/core";
 import { DataCollector } from "./logic/ai/DataCollector";
 import { InputManager } from "./logic/InputManager";
 import { LevelManager } from "./logic/LevelManager";
@@ -18,21 +18,35 @@ class Game {
         this.levelManager = new LevelManager(
             this.scene, 
             // onLevelLoaded callback
-            (spawnPoints) => {
+            (spawnPoints, enemyType) => {
                 this.entityManager.clearAll();
                 spawnPoints.forEach(point => {
-                    this.entityManager.spawnEnemy("Drone", point);
+                    this.entityManager.spawnEnemy(enemyType || "Drone", point);
                 });
             },
-            // ✅ NOUVEAU: onRoomCleared callback
+            // onRoomCleared callback
             (roomIndex) => {
                 console.log(`📊 Données collectées pour la salle ${roomIndex + 1}`);
+            },
+            // onGameWon callback
+            () => {
+                this.triggerGameWon();
             }
         );
+
+        // Liaison EntityManager <-> LevelManager
+        this.entityManager.setLevelManager(this.levelManager);
 
         this.gameState = "START";
         this.startScreen = document.getElementById("start-screen");
         this.gameOverScreen = document.getElementById("game-over-screen");
+        this.gameWonScreen = document.getElementById("game-won-screen");
+        
+        // Initialisation des boutons
+        const restartBtns = document.querySelectorAll("#restart-btn, #game-over-screen .blink");
+        restartBtns.forEach(btn => {
+            btn.addEventListener("click", () => this.restartGame());
+        });
 
         this.cameraOffset = new Vector3(0, 12, -12);
         this.gameStartTime = 0;
@@ -44,13 +58,20 @@ class Game {
         this.scene.clearColor = new Color3(0.01, 0.01, 0.02);
         this.camera = new FreeCamera("mainCamera", this.cameraOffset.clone(), this.scene);
 
+        // Musique de fond (Cyberpunk / Synthwave)
+        this.music = new Sound("Music", "assets/musics/background_music.mp3", this.scene, null, {
+            loop: true,
+            autoplay: false,
+            volume: 0.3
+        });
+
         this.levelManager.initGlobalEnvironment();
         this.yasso = new Player(this.scene);
 
         window.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
                 if (this.gameState === "START") this.startGame();
-                else if (this.gameState === "GAMEOVER") this.restartGame();
+                else if (this.gameState === "GAMEOVER" || this.gameState === "GAMEWON") this.restartGame();
             }
         });
 
@@ -61,9 +82,15 @@ class Game {
         this.gameState = "PLAYING";
         this.startScreen.classList.remove("active");
         this.gameOverScreen.classList.remove("active");
+        this.gameWonScreen.classList.remove("active");
+        
+        if (this.music && !this.music.isPlaying) {
+            this.music.play();
+        }
+
         this.ai.reset();
         this.gameStartTime = Date.now();
-        this.levelManager.loadFloor(1);
+        this.levelManager.loadFloor(1, this.ai);
         this.yasso.reset();
     }
 
@@ -76,6 +103,23 @@ class Game {
         this.gameOverScreen.classList.add("active");
     }
 
+    triggerGameWon() {
+        this.gameState = "GAMEWON";
+        this.gameWonScreen.classList.add("active");
+        
+        // Mise à jour des stats de fin
+        const scoreEl = document.getElementById("final-score");
+        const timeEl = document.getElementById("final-time");
+        
+        if (scoreEl) scoreEl.innerText = `${Math.floor(Math.random() * 20 + 80)}%`; // Simulation score
+        if (timeEl) {
+            const time = Math.floor((Date.now() - this.gameStartTime) / 1000);
+            const min = Math.floor(time / 60).toString().padStart(2, '0');
+            const sec = (time % 60).toString().padStart(2, '0');
+            timeEl.innerText = `${min}:${sec}`;
+        }
+    }
+
     startLoop() {
         this.scene.onBeforeRenderObservable.add(() => {
             if (this.gameState !== "PLAYING") {
@@ -84,7 +128,12 @@ class Game {
             }
 
             this.yasso.update(this.inputs, this.ai);
-            this.levelManager.checkExitInteraction(this.yasso);
+            
+            // Interaction avec les caisses de bonus (Collision simple maintenant gérée dans LevelManager.checkBonusInteraction)
+            // Mais on doit appeler checkBonusInteraction à chaque frame
+            this.levelManager.checkBonusInteraction(this.yasso);
+
+            this.levelManager.checkExitInteraction(this.yasso, this.entityManager, this.ai);
 
             if (this.yasso.mesh) {
                 this.handleCameraZoom();
@@ -92,7 +141,6 @@ class Game {
                 this.camera.setTarget(this.yasso.mesh.position);
             }
 
-            // ✅ MODIFIÉ: Gestion des collisions avec système de vie
             const collisionDetected = this.entityManager.update(this.yasso, this.ai);
             
             if (collisionDetected && (Date.now() - this.gameStartTime > 1000)) {
@@ -102,8 +150,8 @@ class Game {
                 }
             }
 
-            // ✅ NOUVEAU: Vérifier si tous les ennemis sont éliminés
-            if (this.entityManager.getEnemyCount() === 0 && this.levelManager.isRoomLocked) {
+            // ✅ Vérifier si tous les ennemis sont éliminés pour déclencher les événements de fin de salle (Boss)
+            if (this.entityManager.getEnemyCount() === 0) {
                 this.levelManager.onRoomEnemiesCleared();
             }
 
@@ -128,26 +176,22 @@ class Game {
         }
     }
 
-    /**
-     * ✅ MODIFIÉ: Mise à jour du HUD complet
-     */
     updateHUD() {
         const hud = document.getElementById("nexus-hud");
         const bar = document.getElementById("nexus-bar-fill");
         const status = document.getElementById("nexus-status");
         const patternText = document.getElementById("nexus-pattern");
         
-        // ✅ NOUVEAU: Éléments de vie et dash
         const healthBar = document.getElementById("health-bar-fill");
         const healthText = document.getElementById("health-text");
         const dashIndicator = document.getElementById("dash-indicator");
+        const powerIndicator = document.getElementById("power-indicator");
 
         if (!hud || !bar) return;
 
         if (this.gameState === "PLAYING") {
             hud.style.display = "block";
             
-            // Barre d'analyse IA
             const progress = (this.ai.actionCounter / this.ai.threshold) * 100;
             bar.style.width = `${Math.min(progress, 100)}%`;
 
@@ -165,16 +209,15 @@ class Game {
                 patternText.innerText = "Pattern : RECHERCHE...";
             }
 
-            // ✅ NOUVEAU: Barre de vie
             if (healthBar && healthText) {
                 const healthData = this.yasso.getHealthData();
                 healthBar.style.width = `${healthData.percentage}%`;
                 healthText.innerText = `${healthData.current}/${healthData.max}`;
                 
-                if (healthData.current === 1) {
+                if (healthData.current <= 3) {
                     healthBar.style.background = "#ff0000";
                     healthBar.style.boxShadow = "0 0 10px #ff0000";
-                } else if (healthData.current === 2) {
+                } else if (healthData.current <= 6) {
                     healthBar.style.background = "#ff8800";
                     healthBar.style.boxShadow = "0 0 10px #ff8800";
                 } else {
@@ -183,7 +226,6 @@ class Game {
                 }
             }
 
-            // ✅ NOUVEAU: Indicateur de dash
             if (dashIndicator) {
                 const dashData = this.yasso.getDashData();
                 
@@ -196,6 +238,23 @@ class Game {
                 } else {
                     dashIndicator.innerText = "⏳ DASH COOLDOWN";
                     dashIndicator.style.color = "#666666";
+                }
+            }
+
+            if (powerIndicator) {
+                if (this.yasso.activePower) {
+                    powerIndicator.style.display = "block";
+                    powerIndicator.innerText = `★ BONUS ACTIF: ${this.yasso.activePower.toUpperCase()}`;
+                    powerIndicator.style.color = "#00ff00"; // Vert pour actif
+                } else if (this.yasso.storedPower) {
+                    powerIndicator.style.display = "block";
+                    powerIndicator.innerText = `[E] BONUS PRÊT: ${this.yasso.storedPower.toUpperCase()}`;
+                    
+                    if (this.yasso.storedPower === "Traqueur") powerIndicator.style.color = "red";
+                    else if (this.yasso.storedPower === "Sentinelle") powerIndicator.style.color = "orange";
+                    else if (this.yasso.storedPower === "Pulse") powerIndicator.style.color = "magenta";
+                } else {
+                    powerIndicator.style.display = "none";
                 }
             }
         } else {

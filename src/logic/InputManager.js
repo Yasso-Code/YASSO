@@ -1,19 +1,20 @@
 /**
  * @class InputManager
- * @description Gère les entrées WASD pour le mouvement et Q/E pour le zoom.
- * ✅ CORRIGÉ: Utilise WASD au lieu de ZQSD
+ * @description Gère les entrées
  */
 export class InputManager {
     constructor() {
         this.keys = {
-            forward: false,  // W
-            left: false,     // A
+            forward: false,  // Z
+            left: false,     // Q
             backward: false, // S
             right: false,    // D
             dash: false,     // Space
-            zoomIn: false,   // Q
-            zoomOut: false   // E
+            zoomIn: false,   // W
+            zoomOut: false,  // X
+            interact: false  // E
         };
+        this.interactPressedOnce = false; // Pour éviter le spam
         this._initListeners();
     }
 
@@ -30,17 +31,25 @@ export class InputManager {
     _handleKey(key, isPressed) {
         switch (key) {
             // ✅ WASD pour le mouvement
-            case "w": this.keys.forward = isPressed; break;
-            case "a": this.keys.left = isPressed; break;
+            case "z": this.keys.forward = isPressed; break;
+            case "q": this.keys.left = isPressed; break;
             case "s": this.keys.backward = isPressed; break;
             case "d": this.keys.right = isPressed; break;
             
             // Dash
             case " ": this.keys.dash = isPressed; break;
             
-            // ✅ Q/E pour le zoom
-            case "q": this.keys.zoomIn = isPressed; break;
-            case "e": this.keys.zoomOut = isPressed; break;
+            // Pour le zoom
+            case "w": this.keys.zoomIn = isPressed; break;
+            case "x": this.keys.zoomOut = isPressed; break;
+
+            // Interaction
+            case "e": 
+                if (isPressed && !this.keys.interact) {
+                    this.interactPressedOnce = true;
+                }
+                this.keys.interact = isPressed; 
+                break;
         }
     }
 
@@ -54,6 +63,14 @@ export class InputManager {
 
     isDashTriggered() {
         return this.keys.dash;
+    }
+
+    isInteractTriggered() {
+        if (this.interactPressedOnce) {
+            this.interactPressedOnce = false;
+            return true;
+        }
+        return false;
     }
 
     getMovementInput() {

@@ -8,7 +8,13 @@ export class DataCollector {
         /**
          * @property {Object} data - Stocke les compteurs de mouvements et d'actions.
          */
-        this.data = { movements: { left: 0, right: 0, up: 0, down: 0 }, dashCount: 0 };
+        this.data = { 
+            movements: { left: 0, right: 0, up: 0, down: 0 }, 
+            dashCount: 0,
+            enemiesKilled: 0,
+            enemiesSkipped: 0,
+            roomsCleared: 0
+        };
         
         /**
          * @property {number} actionCounter - Compteur global pour déclencher l'adaptation.
@@ -31,7 +37,13 @@ export class DataCollector {
      * Réinitialise les données collectées (ex: nouvelle partie).
      */
     reset() {
-        this.data = { movements: { left: 0, right: 0, up: 0, down: 0 }, dashCount: 0 };
+        this.data = { 
+            movements: { left: 0, right: 0, up: 0, down: 0 }, 
+            dashCount: 0,
+            enemiesKilled: 0,
+            enemiesSkipped: 0,
+            roomsCleared: 0
+        };
         this.actionCounter = 0;
         this.lastMoveTime = 0;
     }
@@ -64,6 +76,28 @@ export class DataCollector {
         this.actionCounter += 2;
     }
 
+    recordKill() {
+        this.data.enemiesKilled++;
+        this.actionCounter += 5;
+        console.log("📊 IA : Ennemi éliminé");
+    }
+
+    recordRoomCompletion(enemiesRemaining) {
+        this.data.roomsCleared++;
+        this.data.enemiesSkipped += enemiesRemaining;
+        console.log(`📊 IA : Salle terminée. Ennemis ignorés: ${enemiesRemaining}`);
+    }
+
+    /**
+     * Calcule le style de jeu du joueur.
+     * @returns {number} Valeur entre 0 (Furtif) et 1 (Bourrin).
+     */
+    getAggressionLevel() {
+        const totalEncountered = this.data.enemiesKilled + this.data.enemiesSkipped;
+        if (totalEncountered === 0) return 0.5; // Neutre au début
+        return this.data.enemiesKilled / totalEncountered;
+    }
+
     /**
      * Vérifie si l'IA doit s'adapter en fonction du seuil d'actions.
      * @returns {boolean} True si le seuil est atteint.
@@ -77,14 +111,14 @@ export class DataCollector {
     }
 
     /**
- * Enregistre une action spécifique (ex: dash_kill)
- * @param {string} actionType 
- */
-recordAction(actionType) {
-    if (actionType === "dash_kill") {
-        // On peut augmenter le compteur d'actions pour accélérer l'adaptation de l'IA
-        this.actionCounter += 5; 
-        console.log("📊 IA : Pattern d'attaque détecté (Dash Kill)");
+     * Enregistre une action spécifique (ex: dash_kill)
+     * @param {string} actionType 
+     */
+    recordAction(actionType) {
+        if (actionType === "dash_kill") {
+            // On peut augmenter le compteur d'actions pour accélérer l'adaptation de l'IA
+            this.actionCounter += 5; 
+            console.log("📊 IA : Pattern d'attaque détecté (Dash Kill)");
+        }
     }
-}
 }

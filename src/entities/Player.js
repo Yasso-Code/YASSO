@@ -1,4 +1,4 @@
-import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, Animation, CubicEase, EasingFunction } from "@babylonjs/core";
+import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, Animation, CubicEase, EasingFunction, ParticleSystem, Texture, Color4 } from "@babylonjs/core";
 
 /**
  * @class Player
@@ -9,16 +9,23 @@ export class Player {
         this.scene = scene;
         this._initMesh();
 
-        this.speed = 0.18;
+        this.baseSpeed = 0.18;
+        this.speed = this.baseSpeed;
         this.isDashReady = true;
         this.lastMoveDirection = new Vector3(0, 0, 1);
         this.isDashing = false;
+        this.currentDashAnim = null; // Reference to the dash animation
 
         // Systeme de vie
-        this.maxHealth = 3;
-        this.currentHealth = 3;
+        this.maxHealth = 10; 
+        this.currentHealth = 10;
         this.isInvincible = false;
         this.invincibilityDuration = 1500;
+
+        // Bonus temporaires
+        this.activePower = null;
+        this.storedPower = null; // Pouvoir ramassé mais pas encore activé
+        this.powerTimer = 0;
     }
 
     _initMesh() {
@@ -46,6 +53,7 @@ export class Player {
     }
 
     reset() {
+        this.cancelDash(); // Stop any ongoing dash
         this.mesh.position = new Vector3(0, 0.8, 0);
         this.mesh.rotation = Vector3.Zero();
         this.lastMoveDirection = new Vector3(0, 0, 1);
@@ -53,6 +61,17 @@ export class Player {
         this.currentHealth = this.maxHealth;
         this.isInvincible = false;
         this.mesh.material.alpha = 0.8;
+        this.deactivatePower();
+        this.storedPower = null;
+    }
+
+    cancelDash() {
+        if (this.currentDashAnim) {
+            this.currentDashAnim.stop();
+            this.currentDashAnim = null;
+        }
+        this.isDashing = false;
+        this._hideDashTrail();
     }
 
     _isValidMove(targetPosition) {
@@ -69,6 +88,20 @@ export class Player {
     }
 
     update(inputManager, aiCollector) {
+        // Gestion du timer de pouvoir
+        if (this.activePower) {
+            this.powerTimer--;
+            if (this.powerTimer <= 0) {
+                this.deactivatePower();
+            }
+        }
+
+        // Activation du pouvoir stocké avec E
+        if (inputManager.isInteractTriggered() && this.storedPower) {
+            this.activatePower(this.storedPower);
+            this.storedPower = null;
+        }
+
         if (this.isDashing) return;
 
         let moveDir = Vector3.Zero();
@@ -99,7 +132,7 @@ export class Player {
     }
 
     takeDamage() {
-        if (this.isInvincible) return false;
+        if (this.isInvincible || (this.activePower === "Sentinelle")) return false; // Invincibilité Sentinelle
 
         this.currentHealth--;
         console.log(`YASSO HIT! Health: ${this.currentHealth}/${this.maxHealth}`);
@@ -137,6 +170,11 @@ export class Player {
         this.isDashing = true;
         aiCollector.recordDash();
 
+        // Bonus Pulse : Explosion au départ du dash
+        if (this.activePower === "Pulse") {
+            this._triggerPulseExplosion();
+        }
+
         const dashDistance = 3.5;
         const dashDir = direction.normalize();
 
@@ -151,7 +189,7 @@ export class Player {
         const ease = new CubicEase();
         ease.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
 
-        Animation.CreateAndStartAnimation(
+        this.currentDashAnim = Animation.CreateAndStartAnimation(
             "dashAnim",
             this.mesh,
             "position",
@@ -164,6 +202,7 @@ export class Player {
             () => {
                 this.isDashing = false;
                 this._hideDashTrail();
+                this.currentDashAnim = null;
             }
         );
 
@@ -191,6 +230,63 @@ export class Player {
     _hideDashTrail() {
         if (!this.trailMesh) return;
         this.trailMesh.material.alpha = 0;
+    }
+
+    // --- Gestion des Pouvoirs ---
+
+    collectPower(type) {
+        this.storedPower = type;
+        console.log(`POWER STORED: ${type}`);
+        // Petit effet visuel pour dire qu'on a ramassé un truc ?
+    }
+
+    activatePower(type) {
+        this.deactivatePower(); // Reset précédent
+        this.activePower = type;
+        this.powerTimer = 600; // 10 secondes (à 60fps)
+
+        console.log(`POWER UP ACTIVATED: ${type}`);
+
+        if (type === "Traqueur") {
+            this.speed = this.baseSpeed * 1.5; // Vitesse augmentée
+            this.mesh.material.emissiveColor = new Color3(1, 0, 0); // Rouge
+        } else if (type === "Sentinelle") {
+            // Invincibilité gérée dans takeDamage
+            this.mesh.material.emissiveColor = new Color3(1, 0.5, 0); // Orange
+        } else if (type === "Pulse") {
+            // Explosion gérée dans executeDash
+            this.mesh.material.emissiveColor = new Color3(1, 0, 1); // Violet
+        }
+    }
+
+    deactivatePower() {
+        if (!this.activePower) return;
+        
+        console.log("POWER UP ENDED");
+        this.activePower = null;
+        this.speed = this.baseSpeed;
+        this.mesh.material.emissiveColor = new Color3(0, 1, 1); // Retour au Cyan
+    }
+
+    _triggerPulseExplosion() {
+        // Effet visuel
+        const particleSystem = new ParticleSystem("pulseExplosion", 50, this.scene);
+        particleSystem.particleTexture = new Texture("https://assets.babylonjs.com/textures/flare.png", this.scene);
+        particleSystem.emitter = this.mesh.position.clone();
+        particleSystem.color1 = new Color4(1, 0, 1, 1.0);
+        particleSystem.color2 = new Color4(0.5, 0, 0.5, 1.0);
+        particleSystem.minSize = 0.5;
+        particleSystem.maxSize = 1.5;
+        particleSystem.minLifeTime = 0.2;
+        particleSystem.maxLifeTime = 0.5;
+        particleSystem.emitRate = 1000;
+        particleSystem.targetStopDuration = 0.1;
+        particleSystem.start();
+
+        // Logique de dégâts de zone (simple raycast autour ou sphere check)
+        // Pour simplifier, on suppose que l'EntityManager gère les collisions, 
+        // mais ici on pourrait ajouter une logique pour tuer les ennemis proches.
+        // Pour l'instant, c'est surtout visuel et défensif.
     }
 
     getHealthData() {

@@ -18,10 +18,11 @@
             <h1>YASSO</h1>
             <p>Neural Network Infiltration</p>
             <div class="controls-hint">
-    <p>Déplacement : WASD</p>
-    <p>Combat : ESPACE (Dash à travers les ennemis)</p>
-    <p>Zoom : Q / E</p>
-</div>
+                <p>Déplacement : WASD</p>
+                <p>Combat : ESPACE (Dash à travers les ennemis)</p>
+                <p>Interaction : E (Activer les bonus)</p>
+                <p>Zoom : Q / E</p>
+            </div>
             <p class="blink">Appuyez sur ENTRÉE pour commencer</p>
         </div>
 
@@ -32,6 +33,17 @@
             <p class="blink">Appuyez sur ENTRÉE pour redémarrer</p>
         </div>
 
+        <!-- Écran de Victoire -->
+        <div id="game-won-screen" class="screen">
+            <h1 style="color: #00ff00; text-shadow: 0 0 20px #00ff00;">MISSION ACCOMPLIE</h1>
+            <p>Le Nexus a été purifié. Le réseau est sécurisé.</p>
+            <div style="margin: 30px 0;">
+                <p>Score IA : <span id="final-score">100%</span></p>
+                <p>Temps : <span id="final-time">00:00</span></p>
+            </div>
+            <button id="restart-btn" class="cyber-btn">REJOUER</button>
+        </div>
+
         <!-- ✅ HUD COMPLET -->
         <div id="nexus-hud"
             style="position: absolute; top: 20px; left: 20px; font-family: 'Courier New', monospace; color: #00ffff; pointer-events: none; display: none;">
@@ -39,7 +51,7 @@
             <!-- ✅ NOUVEAU: Barre de vie -->
             <div style="margin-bottom: 15px;">
                 <div style="font-size: 14px; letter-spacing: 2px; margin-bottom: 5px;">
-                    > YASSO INTEGRITY : <span id="health-text">3/3</span>
+                    > YASSO INTEGRITY : <span id="health-text">10/10</span>
                 </div>
                 <div style="width: 250px; height: 12px; border: 1px solid #00ff00; background: rgba(0, 255, 0, 0.1);">
                     <div id="health-bar-fill"
@@ -63,6 +75,12 @@
             <div id="dash-indicator" 
                 style="font-size: 13px; margin-top: 15px; letter-spacing: 1px; font-weight: bold;">
                 ⚡ DASH READY
+            </div>
+
+            <!-- Indicateur de Bonus -->
+            <div id="power-indicator" 
+                style="font-size: 13px; margin-top: 10px; letter-spacing: 1px; font-weight: bold; color: yellow; display: none;">
+                ★ BONUS ACTIF
             </div>
         </div>
     </div>
