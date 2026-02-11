@@ -14,6 +14,6 @@ Exécutez `npm run dev` pour lancer le serveur local.
 
 pour tester
 git add .
-git commit -m "TEST: ajout fichier A"
-git push -u origin test_A
+git commit -m "TEST: ajout fichier B"
+git push -u origin test_B
 
