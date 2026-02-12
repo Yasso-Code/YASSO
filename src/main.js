@@ -1,28 +1,42 @@
-import { Engine, Scene, FreeCamera, Vector3, Color3, Sound } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, Color3 } from "@babylonjs/core";
+import "@babylonjs/loaders"; // Support pour les assets (gltf, obj...)
 import { DataCollector } from "./logic/ai/DataCollector";
 import { InputManager } from "./logic/InputManager";
 import { LevelManager } from "./logic/LevelManager";
 import { EntityManager } from "./logic/EntityManager";
+import { AudioManager } from "./logic/AudioManager";
 import { Player } from "./entities/Player";
 
 class Game {
     constructor() {
         this.canvas = document.getElementById("renderCanvas");
-        this.engine = new Engine(this.canvas, true);
+        this.engine = new Engine(this.canvas, true, {
+            audioEngine: true
+        });
         this.scene = new Scene(this.engine);
 
         this.inputs = new InputManager();
         this.ai = new DataCollector();
+        this.audioManager = new AudioManager(this.scene, this.engine);
         this.entityManager = new EntityManager(this.scene);
 
         this.levelManager = new LevelManager(
-            this.scene, 
+            this.scene,
             // onLevelLoaded callback
             (spawnPoints, enemyType) => {
                 this.entityManager.clearAll();
                 spawnPoints.forEach(point => {
                     this.entityManager.spawnEnemy(enemyType || "Drone", point);
                 });
+
+                // Changement de musique pour le Boss (Etage 5)
+                if (this.levelManager.currentFloor === 5) {
+                    this.audioManager.playMusic("boss");
+                } else {
+                    if (this.audioManager.currentMusicKey === "boss") {
+                        this.audioManager.playMusic("ambient");
+                    }
+                }
             },
             // onRoomCleared callback
             (roomIndex) => {
@@ -34,44 +48,63 @@ class Game {
             }
         );
 
-        // Liaison EntityManager <-> LevelManager
+        // Liaison des managers
         this.entityManager.setLevelManager(this.levelManager);
+        this.entityManager.setAudioManager(this.audioManager);
+        this.levelManager.setAudioManager(this.audioManager);
 
         this.gameState = "START";
         this.startScreen = document.getElementById("start-screen");
         this.gameOverScreen = document.getElementById("game-over-screen");
         this.gameWonScreen = document.getElementById("game-won-screen");
-        
+
         // Initialisation des boutons
         const restartBtns = document.querySelectorAll("#restart-btn, #game-over-screen .blink");
         restartBtns.forEach(btn => {
-            btn.addEventListener("click", () => this.restartGame());
+            btn.addEventListener("click", async () => {
+                await this.audioManager.unlockAudio();
+                this.restartGame();
+            });
         });
 
         this.cameraOffset = new Vector3(0, 12, -12);
         this.gameStartTime = 0;
-        
+
         this.init();
     }
 
-    init() {
+    async init() {
+        // ✅ Active l'écran de chargement Babylon.js
+        this.engine.displayLoadingUI();
+
         this.scene.clearColor = new Color3(0.01, 0.01, 0.02);
         this.camera = new FreeCamera("mainCamera", this.cameraOffset.clone(), this.scene);
-
-        // Musique de fond (Cyberpunk / Synthwave)
-        this.music = new Sound("Music", "assets/musics/background_music.mp3", this.scene, null, {
-            loop: true,
-            autoplay: false,
-            volume: 0.3
-        });
 
         this.levelManager.initGlobalEnvironment();
         this.yasso = new Player(this.scene);
 
-        window.addEventListener("keydown", (e) => {
+        this.yasso.setAudioManager(this.audioManager);
+
+        // Charge l'audio en arrière-plan
+        this.audioManager.initAudio().then(() => {
+            console.log("✅ Audio chargé et prêt !");
+            // ✅ Masque l'écran de chargement une fois que tout est prêt
+            this.engine.hideLoadingUI();
+        });
+
+        // ✅ CORRECTION CRITIQUE : Unlock audio AVANT de changer d'état
+        window.addEventListener("keydown", async (e) => {
             if (e.key === "Enter") {
-                if (this.gameState === "START") this.startGame();
-                else if (this.gameState === "GAMEOVER" || this.gameState === "GAMEWON") this.restartGame();
+                // 1️⃣ D'ABORD : Unlock l'audio (CRITIQUE)
+                console.log("🎹 Touche Enter détectée - Unlock audio...");
+                await this.audioManager.unlockAudio();
+
+                // 2️⃣ ENSUITE : Gérer le changement d'état du jeu
+                if (this.gameState === "START") {
+                    this.startGame();
+                } else if (this.gameState === "GAMEOVER" || this.gameState === "GAMEWON") {
+                    this.restartGame();
+                }
             }
         });
 
@@ -83,10 +116,9 @@ class Game {
         this.startScreen.classList.remove("active");
         this.gameOverScreen.classList.remove("active");
         this.gameWonScreen.classList.remove("active");
-        
-        if (this.music && !this.music.isPlaying) {
-            this.music.play();
-        }
+
+        console.log("🎮 Démarrage du jeu - Lancement de la musique ambient");
+        this.audioManager.playMusic("ambient");
 
         this.ai.reset();
         this.gameStartTime = Date.now();
@@ -99,19 +131,22 @@ class Game {
     }
 
     triggerGameOver() {
+        if (this.gameState === "GAMEOVER") return;
         this.gameState = "GAMEOVER";
         this.gameOverScreen.classList.add("active");
+        this.audioManager.stopAll();
     }
 
     triggerGameWon() {
         this.gameState = "GAMEWON";
         this.gameWonScreen.classList.add("active");
-        
-        // Mise à jour des stats de fin
+        this.audioManager.stopAll();
+        this.audioManager.playSound("bonus");
+
         const scoreEl = document.getElementById("final-score");
         const timeEl = document.getElementById("final-time");
-        
-        if (scoreEl) scoreEl.innerText = `${Math.floor(Math.random() * 20 + 80)}%`; // Simulation score
+
+        if (scoreEl) scoreEl.innerText = `${Math.floor(Math.random() * 20 + 80)}%`;
         if (timeEl) {
             const time = Math.floor((Date.now() - this.gameStartTime) / 1000);
             const min = Math.floor(time / 60).toString().padStart(2, '0');
@@ -128,11 +163,8 @@ class Game {
             }
 
             this.yasso.update(this.inputs, this.ai);
-            
-            // Interaction avec les caisses de bonus (Collision simple maintenant gérée dans LevelManager.checkBonusInteraction)
-            // Mais on doit appeler checkBonusInteraction à chaque frame
-            this.levelManager.checkBonusInteraction(this.yasso);
 
+            this.levelManager.checkBonusInteraction(this.yasso);
             this.levelManager.checkExitInteraction(this.yasso, this.entityManager, this.ai);
 
             if (this.yasso.mesh) {
@@ -142,15 +174,15 @@ class Game {
             }
 
             const collisionDetected = this.entityManager.update(this.yasso, this.ai);
-            
+
             if (collisionDetected && (Date.now() - this.gameStartTime > 1000)) {
-                const isDead = this.yasso.takeDamage();
-                if (isDead) {
-                    this.triggerGameOver();
-                }
+                this.yasso.takeDamage();
             }
 
-            // ✅ Vérifier si tous les ennemis sont éliminés pour déclencher les événements de fin de salle (Boss)
+            if (this.yasso.currentHealth <= 0) {
+                this.triggerGameOver();
+            }
+
             if (this.entityManager.getEnemyCount() === 0) {
                 this.levelManager.onRoomEnemiesCleared();
             }
@@ -181,7 +213,7 @@ class Game {
         const bar = document.getElementById("nexus-bar-fill");
         const status = document.getElementById("nexus-status");
         const patternText = document.getElementById("nexus-pattern");
-        
+
         const healthBar = document.getElementById("health-bar-fill");
         const healthText = document.getElementById("health-text");
         const dashIndicator = document.getElementById("dash-indicator");
@@ -191,7 +223,7 @@ class Game {
 
         if (this.gameState === "PLAYING") {
             hud.style.display = "block";
-            
+
             const progress = (this.ai.actionCounter / this.ai.threshold) * 100;
             bar.style.width = `${Math.min(progress, 100)}%`;
 
@@ -213,7 +245,7 @@ class Game {
                 const healthData = this.yasso.getHealthData();
                 healthBar.style.width = `${healthData.percentage}%`;
                 healthText.innerText = `${healthData.current}/${healthData.max}`;
-                
+
                 if (healthData.current <= 3) {
                     healthBar.style.background = "#ff0000";
                     healthBar.style.boxShadow = "0 0 10px #ff0000";
@@ -228,7 +260,7 @@ class Game {
 
             if (dashIndicator) {
                 const dashData = this.yasso.getDashData();
-                
+
                 if (dashData.isDashing) {
                     dashIndicator.innerText = "⚡ DASHING";
                     dashIndicator.style.color = "#ffffff";
@@ -245,11 +277,11 @@ class Game {
                 if (this.yasso.activePower) {
                     powerIndicator.style.display = "block";
                     powerIndicator.innerText = `★ BONUS ACTIF: ${this.yasso.activePower.toUpperCase()}`;
-                    powerIndicator.style.color = "#00ff00"; // Vert pour actif
+                    powerIndicator.style.color = "#00ff00";
                 } else if (this.yasso.storedPower) {
                     powerIndicator.style.display = "block";
                     powerIndicator.innerText = `[E] BONUS PRÊT: ${this.yasso.storedPower.toUpperCase()}`;
-                    
+
                     if (this.yasso.storedPower === "Traqueur") powerIndicator.style.color = "red";
                     else if (this.yasso.storedPower === "Sentinelle") powerIndicator.style.color = "orange";
                     else if (this.yasso.storedPower === "Pulse") powerIndicator.style.color = "magenta";

@@ -16,6 +16,7 @@ export class LevelManager {
         this._currentFloorConfig = null;
         this.bossExitPosition = null; // Stocke la position de sortie pour le boss
         this.roomClearedTriggered = false; // Pour éviter les appels multiples
+        this.audioManager = null;
 
         // Configuration: 5 Étages, 3 Salles chacun (sauf Nexus = 1), Couleurs distinctes
         this.floorConfigs = [
@@ -25,6 +26,10 @@ export class LevelManager {
             { name: "Noyau", color: new Color3(0.5, 0.0, 0.8), rooms: 3, roomType: "complex", enemyType: "Mix" },
             { name: "Nexus", color: new Color3(0.9, 0.9, 0.9), rooms: 1, roomType: "arena", enemyType: "NEXUS" } // 1 seule salle
         ];
+    }
+
+    setAudioManager(audioManager) {
+        this.audioManager = audioManager;
     }
 
     initGlobalEnvironment() {
@@ -65,7 +70,32 @@ export class LevelManager {
 
         this.createRoomVisuals(roomData, config);
 
-        const lastPlatform = roomData.platforms[roomData.platforms.length - 1];
+        // ✅ FIX: On s'assure que le portail n'est pas sur le spawn (0,0,0)
+        let lastPlatform = roomData.platforms[roomData.platforms.length - 1];
+        if (Vector3.Distance(lastPlatform, Vector3.Zero()) < 5) {
+            console.warn("⚠️ Portail trop proche du spawn, déplacement forcé.");
+            // On cherche une plateforme plus loin
+            for (let i = roomData.platforms.length - 1; i >= 0; i--) {
+                if (Vector3.Distance(roomData.platforms[i], Vector3.Zero()) > 8) {
+                    lastPlatform = roomData.platforms[i];
+                    break;
+                }
+            }
+            // Si toujours trop près, on force une position loin
+            if (Vector3.Distance(lastPlatform, Vector3.Zero()) < 5) {
+                lastPlatform = new Vector3(12, 0, 12);
+                // On ajoute visuellement la plateforme si elle n'existe pas
+                const p = MeshBuilder.CreateGround("p_forced", { width: 4, height: 4 }, this.scene);
+                p.position = lastPlatform.clone();
+                const mat = new StandardMaterial("pMat", this.scene);
+                mat.wireframe = true;
+                mat.emissiveColor = config.color;
+                p.material = mat;
+                this.envNodes.push(p);
+            }
+        }
+
+        console.log(`📍 Fin de la salle (Portail) : ${lastPlatform}`);
         
         // Si ce n'est pas la dernière salle de l'étage -> Portail vers salle suivante
         if (roomIndex < config.rooms - 1) {
@@ -74,7 +104,6 @@ export class LevelManager {
             // Si c'est le dernier étage (5), on attend la mort du boss
             if (this.currentFloor === 5) {
                 console.log("BOSS FIGHT: Portail verrouillé jusqu'à la mort du NEXUS");
-                // Le portail apparaîtra au centre (0,0,0) géré dans onBossDefeated
             } else {
                 // Sinon -> Portail vers étage suivant
                 this.createFloorPortal(lastPlatform);
@@ -238,6 +267,10 @@ export class LevelManager {
                 console.log(`BONUS COLLECTED: ${crate.metadata.type}`);
                 player.collectPower(crate.metadata.type); // Stockage au lieu d'activation directe
                 
+                if (this.audioManager) {
+                    this.audioManager.playSound("bonus");
+                }
+
                 crate.dispose();
                 this.bonusCrates.splice(i, 1);
                 return true;

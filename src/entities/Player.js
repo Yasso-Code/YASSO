@@ -15,6 +15,7 @@ export class Player {
         this.lastMoveDirection = new Vector3(0, 0, 1);
         this.isDashing = false;
         this.currentDashAnim = null; // Reference to the dash animation
+        this.audioManager = null;
 
         // Systeme de vie
         this.maxHealth = 10; 
@@ -26,6 +27,10 @@ export class Player {
         this.activePower = null;
         this.storedPower = null; // Pouvoir ramassé mais pas encore activé
         this.powerTimer = 0;
+    }
+
+    setAudioManager(audioManager) {
+        this.audioManager = audioManager;
     }
 
     _initMesh() {
@@ -170,6 +175,11 @@ export class Player {
         this.isDashing = true;
         aiCollector.recordDash();
 
+        // Son de dash
+        if (this.audioManager) {
+            this.audioManager.playSound("dash");
+        }
+
         // Bonus Pulse : Explosion au départ du dash
         if (this.activePower === "Pulse") {
             this._triggerPulseExplosion();
@@ -257,6 +267,10 @@ export class Player {
             // Explosion gérée dans executeDash
             this.mesh.material.emissiveColor = new Color3(1, 0, 1); // Violet
         }
+        
+        if (this.audioManager) {
+            this.audioManager.playSound("bonus");
+        }
     }
 
     deactivatePower() {
@@ -282,6 +296,10 @@ export class Player {
         particleSystem.emitRate = 1000;
         particleSystem.targetStopDuration = 0.1;
         particleSystem.start();
+        
+        if (this.audioManager) {
+            this.audioManager.playSound("explosion");
+        }
 
         // Logique de dégâts de zone (simple raycast autour ou sphere check)
         // Pour simplifier, on suppose que l'EntityManager gère les collisions, 

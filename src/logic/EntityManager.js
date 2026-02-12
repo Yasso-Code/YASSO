@@ -5,10 +5,15 @@ export class EntityManager {
         this.scene = scene;
         this.enemies = [];
         this.levelManager = null;
+        this.audioManager = null;
     }
 
     setLevelManager(levelManager) {
         this.levelManager = levelManager;
+    }
+
+    setAudioManager(audioManager) {
+        this.audioManager = audioManager;
     }
 
     spawnEnemy(type, position) {
@@ -32,6 +37,9 @@ export class EntityManager {
 
             if (player.mesh && enemy.mesh && player.mesh.intersectsMesh(enemy.mesh, false)) {
                 if (player.isDashing) {
+                    // ✅ FIX: On sauvegarde la position AVANT que l'ennemi ne soit potentiellement détruit
+                    const dropPosition = enemy.mesh.position.clone();
+
                     const isDead = enemy.takeDamage(1);
                     
                     if (isDead) {
@@ -41,12 +49,25 @@ export class EntityManager {
                             aiCollector.recordAction("dash_kill");
                         }
                         
+                        // Son d'impact
+                        if (this.audioManager) {
+                            this.audioManager.playSound("hit");
+                        }
+
                         // Drop de bonus
                         if (this.levelManager) {
-                            this.levelManager.spawnBonusDrop(enemy.mesh.position, enemy.type);
+                            this.levelManager.spawnBonusDrop(dropPosition, enemy.type);
+                            
+                            // ✅ FIX: Si c'est le Boss (NEXUS), on déclenche la victoire
+                            if (enemy.type === "NEXUS") {
+                                this.levelManager.onBossDefeated();
+                            }
                         }
                     } else {
                         console.log(`${enemy.type} touché! HP restant: ${enemy.hp}`);
+                        if (this.audioManager) {
+                            this.audioManager.playSound("hit");
+                        }
                     }
                 } else {
                     playerHit = true;
