@@ -1,13 +1,23 @@
 import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, ParticleSystem, Texture, Color4 } from "@babylonjs/core";
 
+/**
+ * @class Enemy
+ * @description Représente un ennemi dans le jeu. Gère son apparence, son comportement (IA) et son cycle de vie.
+ */
 export class Enemy {
+    /**
+     * Crée une instance d'ennemi.
+     * @param {Scene} scene - La scène Babylon.js.
+     * @param {string} type - Le type d'ennemi (Traqueur, Sentinelle, Pulse, NEXUS).
+     * @param {Vector3} startPosition - La position initiale.
+     */
     constructor(scene, type, startPosition) {
         this.scene = scene;
         this.type = type;
         this.isDestroyed = false;
-        this.hp = 1; // Default HP
+        this.hp = 1; // PV par défaut
 
-        // Boss specific properties
+        // Propriétés spécifiques au Boss
         this.maxHp = 25; // Réduit de 40 à 25 pour équilibrer
         this.currentPhase = 1;
         this.summonCooldown = 350; // Augmenté pour moins de spam
@@ -17,6 +27,11 @@ export class Enemy {
         this._initBehavior();
     }
 
+    /**
+     * Initialise le maillage (mesh) de l'ennemi en fonction de son type.
+     * @param {Vector3} startPosition - La position de départ.
+     * @private
+     */
     _initMesh(startPosition) {
         // Forme selon le type
         if (this.type === "Traqueur") {
@@ -70,6 +85,10 @@ export class Enemy {
         this.mesh.material = mat;
     }
 
+    /**
+     * Initialise les paramètres de comportement (vitesse, mode) selon le type.
+     * @private
+     */
     _initBehavior() {
         if (this.type === "Traqueur") {
             this.speed = 0.08;
@@ -100,6 +119,12 @@ export class Enemy {
         }
     }
 
+    /**
+     * Exécute la logique de l'IA pour une frame donnée.
+     * @param {Player} player - L'instance du joueur.
+     * @param {EntityManager} entityManager - Le gestionnaire d'entités (pour les invocations).
+     * @param {DataCollector} aiCollector - Le collecteur de données IA.
+     */
     think(player, entityManager, aiCollector) {
         if (this.isDestroyed) return;
 
@@ -116,10 +141,15 @@ export class Enemy {
         }
     }
 
+    /**
+     * Applique des dégâts à l'ennemi.
+     * @param {number} amount - La quantité de dégâts.
+     * @returns {boolean} Vrai si l'ennemi est détruit.
+     */
     takeDamage(amount = 1) {
         this.hp -= amount;
         
-        // Effet visuel de dégât
+        // Effet visuel de dégât (flash blanc)
         if (this.mesh && this.mesh.material) {
             const originalColor = this.mesh.material.emissiveColor.clone();
             this.mesh.material.emissiveColor = new Color3(1, 1, 1);
@@ -137,6 +167,10 @@ export class Enemy {
         return false;
     }
 
+    /**
+     * Comportement du Traqueur : Poursuit le joueur.
+     * @private
+     */
     _thinkTraqueur(player) {
         if (player.mesh) {
             const direction = player.mesh.position.subtract(this.mesh.position).normalize();
@@ -148,6 +182,10 @@ export class Enemy {
         }
     }
 
+    /**
+     * Comportement de la Sentinelle : Tire à distance si le joueur est proche.
+     * @private
+     */
     _thinkSentinelle(player) {
         this.shootTimer--;
         if (this.shootTimer <= 0 && player.mesh) {
@@ -163,6 +201,10 @@ export class Enemy {
         }
     }
 
+    /**
+     * Comportement du Pulse : Erre aléatoirement et pose des mines.
+     * @private
+     */
     _thinkPulse(player) {
         this.moveTimer--;
         this.mineTimer--;
@@ -177,6 +219,10 @@ export class Enemy {
         this._applyMovement();
     }
 
+    /**
+     * Comportement du Boss (NEXUS) : Phases multiples, invocations, tirs adaptatifs.
+     * @private
+     */
     _thinkNexus(player, entityManager, aiCollector) {
         if (!player.mesh) return;
 
@@ -188,7 +234,7 @@ export class Enemy {
 
         if (this.currentPhase !== phase) {
             this.currentPhase = phase;
-            console.log(`NEXUS ENTERING PHASE ${phase}`);
+            console.log(`NEXUS ENTRE EN PHASE ${phase}`);
             this._onPhaseChange(phase);
         }
 
@@ -276,18 +322,28 @@ export class Enemy {
         }
     }
 
+    /**
+     * Gère les changements visuels lors des transitions de phase du Boss.
+     * @param {number} phase - La nouvelle phase.
+     * @private
+     */
     _onPhaseChange(phase) {
         // Changement visuel
         if (phase === 2) {
             this.mesh.material.emissiveColor = new Color3(1, 0.5, 0); // Orange
-            // Petit soin au changement de phase ?
-            // this.hp += 5; 
         } else if (phase === 3) {
             this.mesh.material.emissiveColor = new Color3(0.5, 0, 1); // Violet sombre
             this._playExplosionEffect(); 
         }
     }
 
+    /**
+     * Invoque des sbires autour du Boss.
+     * @param {EntityManager} entityManager - Le gestionnaire d'entités.
+     * @param {number} phase - La phase actuelle.
+     * @param {string} type - Le type d'ennemi à invoquer.
+     * @private
+     */
     _summonMinions(entityManager, phase, type) {
         const spawnCount = phase === 2 ? 2 : 3;
         
@@ -312,6 +368,10 @@ export class Enemy {
         }
     }
 
+    /**
+     * Comportement par défaut (errance).
+     * @private
+     */
     _thinkDefault(player) {
         this.moveTimer--;
         if (this.moveTimer <= 0) {
@@ -321,6 +381,13 @@ export class Enemy {
         this._applyMovement();
     }
 
+    /**
+     * Tire un projectile vers le joueur.
+     * @param {Player} player - La cible.
+     * @param {number} size - Taille du projectile.
+     * @param {Color3} color - Couleur du projectile.
+     * @private
+     */
     _shoot(player, size = 0.3, color = new Color3(1, 0.5, 0)) {
         const projectile = MeshBuilder.CreateSphere("projectile", { diameter: size }, this.scene);
         projectile.position = this.mesh.position.clone().add(new Vector3(0, 0.5, 0));
@@ -354,6 +421,11 @@ export class Enemy {
         this.scene.registerBeforeRender(moveProjectile);
     }
 
+    /**
+     * Pose une mine au sol.
+     * @param {Player} player - Le joueur (pour la détection de collision).
+     * @private
+     */
     _placeMine(player) {
         const mine = MeshBuilder.CreateCylinder("mine", { 
             height: 0.2, diameter: 1 
@@ -381,7 +453,7 @@ export class Enemy {
             
             // Vérification de collision avec le joueur
             if (player && player.mesh && mine.intersectsMesh(player.mesh, false)) {
-                console.log("BOOM! Mine triggered!");
+                console.log("BOOM! Mine déclenchée !");
                 player.takeDamage();
                 
                 // Effet d'explosion
@@ -412,6 +484,12 @@ export class Enemy {
         this.scene.registerBeforeRender(pulsate);
     }
 
+    /**
+     * Vérifie si un mouvement vers la position cible est valide.
+     * @param {Vector3} targetPosition - La position cible.
+     * @returns {boolean} Vrai si le mouvement est valide.
+     * @private
+     */
     _isValidMove(targetPosition) {
         const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
@@ -425,6 +503,10 @@ export class Enemy {
         return hitInfo.hit;
     }
 
+    /**
+     * Applique le mouvement calculé à l'ennemi.
+     * @private
+     */
     _applyMovement() {
         const nextPos = this.mesh.position.add(this.moveDirection.scale(this.speed));
 
@@ -439,12 +521,19 @@ export class Enemy {
         }
     }
 
+    /**
+     * Change la direction de déplacement aléatoirement.
+     */
     changeDirection() {
         const x = Math.random() - 0.5;
         const z = Math.random() - 0.5;
         this.moveDirection = new Vector3(x, 0, z).normalize();
     }
 
+    /**
+     * Joue l'effet de particules d'explosion lors de la mort.
+     * @private
+     */
     _playExplosionEffect() {
         const particleSystem = new ParticleSystem("explosion", 50, this.scene);
         
@@ -488,6 +577,9 @@ export class Enemy {
         }, 400);
     }
 
+    /**
+     * Supprime l'ennemi de la scène et libère les ressources.
+     */
     dispose() {
         if (this.isDestroyed) return;
         

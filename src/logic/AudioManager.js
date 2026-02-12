@@ -1,297 +1,167 @@
-import {
-    Sound,
-    Engine
-} from "@babylonjs/core";
+import { Sound, Engine } from "@babylonjs/core";
+
+// Configuration centralisée des assets audio
+const AUDIO_CONFIG = {
+    music: {
+        ambient: { url: "/assets/musics/background_ambient.mp3", volume: 0.3 },
+        boss: { url: "/assets/musics/background_boss.mp3", volume: 0.5 }
+    },
+    sfx: {
+        dash: { url: "https://playground.babylonjs.com/sounds/gunshot.wav", volume: 0.4, playbackRate: 2.0 },
+        shoot: { url: "https://playground.babylonjs.com/sounds/gunshot.wav", volume: 0.2 },
+        explosion: { url: "https://playground.babylonjs.com/sounds/gunshot.wav", volume: 0.5 },
+        bonus: { url: "https://playground.babylonjs.com/sounds/gunshot.wav", volume: 0.6 },
+        hit: { url: "https://playground.babylonjs.com/sounds/violons11.wav", volume: 0.5, playbackRate: 4.0 }
+    }
+};
 
 /**
- * ✅ AudioManager pour Babylon.js
- * Utilise l'API Sound standard
+ * Gestionnaire Audio (AudioManager)
+ * Gère le chargement, la lecture et le contrôle des musiques et effets sonores.
  */
-
-const MUSIC_CONFIG = {
-    ambient: { url: "/assets/musics/background_ambient.mp3", volume: 0.3 },
-    boss: { url: "/assets/musics/background_boss.mp3", volume: 0.5 }
-};
-
-const SFX_URLS = {
-    gunshot: "https://playground.babylonjs.com/sounds/gunshot.wav",
-    violons: "https://playground.babylonjs.com/sounds/violons11.wav"
-};
-
 export class AudioManager {
+    /**
+     * Crée une instance de AudioManager.
+     * @param {Scene} scene - La scène Babylon.js.
+     * @param {Engine} engine - Le moteur Babylon.js (pour l'AudioEngine).
+     */
     constructor(scene, engine) {
-        console.log("🔥 AudioManager créé (Babylon.js 8.x API)");
-
         this.scene = scene;
-        this.engine = engine;
-        this.audioEngine = null;
+        this.engine = engine; // Stockage explicite de l'engine si nécessaire, bien que Engine.audioEngine soit statique
 
+        // Stockage des instances sonores
         this.musics = new Map();
         this.sfx = new Map();
 
         this.currentMusicKey = null;
-        this.isReady = false;
-        this.isUnlocked = false;
+        this.isAudioUnlocked = false;
     }
 
     /**
-     * Initialise l'audio de manière NON-BLOQUANTE
-     * Le jeu peut démarrer pendant que l'audio charge
+     * Getter pour récupérer l'AudioEngine de manière sécurisée.
+     * @returns {AudioEngine} L'instance du moteur audio Babylon.js.
+     */
+    get audioEngine() {
+        return Engine.audioEngine;
+    }
+
+    /**
+     * Initialise et précharge les sons définis dans la configuration.
+     * @async
      */
     async initAudio() {
-        console.log("⏳ Initialisation Audio...");
-
         try {
-            // ✅ Dans Babylon.js, l'audioEngine est lié à l'engine
-            this.audioEngine = this.engine.getAudioEngine ? this.engine.getAudioEngine() : Engine.audioEngine;
+            const musicPromises = Object.entries(AUDIO_CONFIG.music).map(([key, config]) =>
+                this._loadSound(key, config, this.musics, { loop: true, autoplay: false, streaming: true })
+            );
 
-            if (!this.audioEngine) {
-                console.warn("⚠️ AudioEngine non disponible immédiatement");
-            }
+            const sfxPromises = Object.entries(AUDIO_CONFIG.sfx).map(([key, config]) =>
+                this._loadSound(key, config, this.sfx, { loop: false, autoplay: false })
+            );
 
-            // ✅ ÉTAPE 2 : Charger les musiques
-            await this._loadStreamingMusics();
-
-            // ✅ ÉTAPE 3 : Charger les SFX
-            await this._loadSFX();
-
-            this.isReady = true;
-            console.log("✅ Audio Manager prêt !");
-
+            await Promise.all([...musicPromises, ...sfxPromises]);
+            console.log("Gestionnaire Audio initialisé.");
         } catch (error) {
-            console.error("❌ Erreur lors de l'initialisation audio:", error);
+            console.error("Échec de l'initialisation audio :", error);
         }
     }
 
     /**
-     * Déverrouille l'audio (requis par les navigateurs)
-     * Doit être appelé dans un gestionnaire d'événement utilisateur
+     * Méthode générique de chargement de son (Promisifiée).
+     * @param {string} key - Le nom/clé du son.
+     * @param {Object} config - Configuration (url, volume, playbackRate).
+     * @param {Map} storageMap - La Map où stocker le son (musics ou sfx).
+     * @param {Object} baseOptions - Options par défaut (loop, streaming, etc.).
+     * @returns {Promise<void>} Une promesse résolue une fois le son chargé.
+     * @private
      */
-    async unlockAudio() {
-        console.log("🔓 unlockAudio() appelé");
+    _loadSound(key, config, storageMap, baseOptions) {
+        return new Promise((resolve, reject) => {
+            const options = {
+                ...baseOptions,
+                volume: config.volume || 1.0,
+                playbackRate: config.playbackRate || 1.0
+            };
 
-        if (this.isUnlocked) {
-            console.log("   ✅ Déjà déverrouillé");
-            return;
-        }
+            const sound = new Sound(key, config.url, this.scene,
+                () => {
+                    storageMap.set(key, sound);
+                    resolve();
+                },
+                options
+            );
 
-        // On récupère l'engine au cas où il ne l'était pas au début
-        if (!this.audioEngine) {
-            this.audioEngine = this.engine.getAudioEngine ? this.engine.getAudioEngine() : Engine.audioEngine;
-        }
+            sound.onError = (err) => reject(`Échec du chargement du son '${key}': ${err}`);
+        });
+    }
 
-        // Si toujours null, on essaie de forcer sa création via l'API statique
-        if (!this.audioEngine && Engine.audioEngine) {
-            this.audioEngine = Engine.audioEngine;
-        }
-
-        if (!this.audioEngine) {
-            console.error("❌ Moteur audio non disponible");
-            // Tentative de secours : Babylon peut avoir besoin qu'on accède à Engine.audioEngine pour l'instancier
-            try {
-                this.audioEngine = Engine.audioEngine;
-                console.log("🔄 Tentative de récupération via Engine.audioEngine statique...");
-            } catch(e) {
-                console.error("❌ Échec critique de récupération de l'AudioEngine");
-            }
-        }
-
-        if (!this.audioEngine) {
-            console.error("❌ DEFINITIVEMENT INDISPONIBLE");
-            return;
-        }
+    /**
+     * Déverrouille l'AudioContext (Doit être appelé sur un clic/touche utilisateur).
+     * Nécessaire pour les navigateurs modernes qui bloquent l'audio automatique.
+     */
+    unlockAudio() {
+        if (this.isAudioUnlocked || !this.audioEngine) return;
 
         try {
-            // ✅ Déverrouillage standard Babylon.js
-            console.log("🔓 Tentative de déverrouillage de l'audioEngine...");
             this.audioEngine.unlock();
-            
-            this.isUnlocked = true;
-            console.log("✅✅✅ AUDIO DÉVERROUILLÉ ✅✅✅");
-
+            this.isAudioUnlocked = true;
+            console.log("Moteur audio déverrouillé.");
         } catch (e) {
-            console.error("❌ Erreur unlockAudio:", e);
+            console.warn("Impossible de déverrouiller le moteur audio :", e);
         }
     }
 
     /**
-     * Charge les musiques en mode STREAMING
-     * Avantage : pas de chargement en mémoire, lecture instantanée
-     */
-    async _loadStreamingMusics() {
-        console.log("📥 Chargement des musiques...");
-
-        const promises = Object.entries(MUSIC_CONFIG).map(([key, config]) => {
-            return new Promise((resolve) => {
-                console.log(`   🎵 Chargement: ${key}`);
-                const sound = new Sound(
-                    key,
-                    config.url,
-                    this.scene,
-                    () => {
-                        console.log(`   ✅ Prêt: ${key}`);
-                        resolve();
-                    },
-                    {
-                        loop: true,
-                        autoplay: false,
-                        volume: config.volume,
-                        streaming: true
-                    }
-                );
-                this.musics.set(key, sound);
-            });
-        });
-
-        await Promise.all(promises);
-        console.log("✅ Toutes les musiques chargées");
-    }
-
-    /**
-     * Charge les SFX en buffer
-     */
-    async _loadSFX() {
-        console.log("📥 Chargement des SFX...");
-
-        const sfxConfigs = [
-            { name: "dash", url: SFX_URLS.gunshot, volume: 0.4, playbackRate: 2.0 },
-            { name: "shoot", url: SFX_URLS.gunshot, volume: 0.2 },
-            { name: "explosion", url: SFX_URLS.gunshot, volume: 0.5 },
-            { name: "bonus", url: SFX_URLS.gunshot, volume: 0.6 },
-            { name: "hit", url: SFX_URLS.violons, volume: 0.5, playbackRate: 4.0 }
-        ];
-
-        const promises = sfxConfigs.map(config => {
-            return new Promise((resolve) => {
-                const sound = new Sound(
-                    config.name,
-                    config.url,
-                    this.scene,
-                    () => resolve(),
-                    {
-                        volume: config.volume,
-                        playbackRate: config.playbackRate || 1.0
-                    }
-                );
-                this.sfx.set(config.name, sound);
-            });
-        });
-
-        await Promise.all(promises);
-        console.log("✅ Tous les SFX chargés");
-    }
-
-    /**
-     * Joue une musique de fond
+     * Joue une musique (gère la transition et l'arrêt de la précédente).
+     * @param {string} key - La clé de la musique à jouer.
      */
     playMusic(key) {
-        console.log(`🎵 playMusic("${key}")`);
+        if (!this.audioEngine) return;
 
-        // On s'assure d'avoir l'audioEngine
-        if (!this.audioEngine) {
-            this.audioEngine = this.engine.getAudioEngine ? this.engine.getAudioEngine() : Engine.audioEngine;
-        }
+        // Si c'est déjà la même musique qui joue, on ne fait rien
+        if (this.currentMusicKey === key && this.musics.get(key)?.isPlaying) return;
 
-        // Si toujours null, on essaie de forcer sa création via l'API statique
-        if (!this.audioEngine && Engine.audioEngine) {
-            this.audioEngine = Engine.audioEngine;
-        }
+        // Arrêt de la musique précédente
+        this.stopCurrentMusic();
 
-        // Vérification du verrouillage
-        if (this.audioEngine && !this.isUnlocked) {
-            if (this.audioEngine.unlocked) {
-                this.isUnlocked = true;
-            } else {
-                console.error("❌ AUDIO NON DÉVERROUILLÉ");
-                console.error("   Appelez unlockAudio() dans un event handler utilisateur");
-                return;
-            }
-        }
-
-        if (!this.isReady) {
-            console.warn("⚠️ Audio pas encore prêt, tentative quand même...");
-        }
-
-        // Vérifie si déjà en lecture
-        if (this.currentMusicKey === key) {
-            const current = this.musics.get(key);
-            if (current && current.isPlaying) {
-                console.log("   ⚠️ Déjà en lecture");
-                return;
-            }
-        }
-
-        // Stop musique précédente
-        if (this.currentMusicKey) {
-            const prevMusic = this.musics.get(this.currentMusicKey);
-            if (prevMusic && prevMusic.isPlaying) {
-                console.log(`   ⏹️ Stop: ${this.currentMusicKey}`);
-                prevMusic.stop();
-            }
-        }
-
-        // Lance nouvelle musique
-        const nextMusic = this.musics.get(key);
-        if (!nextMusic) {
-            console.error(`❌ Musique introuvable: ${key}`);
-            console.log("   Disponibles:", Array.from(this.musics.keys()));
-            return;
-        }
-
-        this.currentMusicKey = key;
-
-        try {
-            console.log(`   ▶️ play()...`);
-            nextMusic.play();
-
-            // Vérification après un court délai
-            setTimeout(() => {
-                if (nextMusic.isPlaying) {
-                    console.log("   ✅✅✅ MUSIQUE EN LECTURE ✅✅✅");
-                } else {
-                    console.error("   ❌ La musique n'a pas démarré");
-                    if (this.audioEngine && !this.audioEngine.unlocked) {
-                        console.error("   Context is still LOCKED");
-                    }
-                }
-            }, 100);
-
-        } catch (e) {
-            console.error(`❌ Erreur play():`, e);
+        const music = this.musics.get(key);
+        if (music) {
+            this.currentMusicKey = key;
+            music.play();
+        } else {
+            console.warn(`Musique '${key}' introuvable.`);
         }
     }
 
     /**
-     * Joue un effet sonore
+     * Joue un effet sonore (Fire & Forget).
+     * @param {string} key - La clé de l'effet sonore.
      */
     playSound(key) {
-        if (!this.isUnlocked) {
-            console.warn(`⚠️ SFX "${key}" ignoré (audio locked)`);
-            return;
-        }
-
         const sound = this.sfx.get(key);
         if (sound) {
-            console.log(`🔊 SFX: ${key}`);
             sound.play();
         } else {
-            console.warn(`⚠️ SFX introuvable: ${key}`);
+            console.warn(`SFX '${key}' introuvable.`);
         }
     }
 
     /**
-     * Arrête toutes les musiques
+     * Arrête la musique en cours.
      */
-    stopAll() {
-        console.log("⏹️ Arrêt de tous les sons");
-
+    stopCurrentMusic() {
         if (this.currentMusicKey) {
             const music = this.musics.get(this.currentMusicKey);
-            if (music && music.isPlaying) {
-                music.stop();
-            }
+            if (music) music.stop();
+            this.currentMusicKey = null;
         }
+    }
 
-        this.currentMusicKey = null;
+    /**
+     * Arrête tous les sons (utile pour le Game Over ou changement de scène).
+     */
+    stopAll() {
+        this.stopCurrentMusic();
+        this.sfx.forEach(sound => sound.stop());
     }
 }

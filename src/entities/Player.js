@@ -1,10 +1,14 @@
 import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, Animation, CubicEase, EasingFunction, ParticleSystem, Texture, Color4 } from "@babylonjs/core";
 
 /**
- * @class Player
- * @description Represente le joueur (Yasso).
+ * Classe Joueur (Player)
+ * Représente le personnage principal (Yasso), gère ses mouvements, sa santé, ses pouvoirs et ses interactions.
  */
 export class Player {
+    /**
+     * Crée une instance du joueur.
+     * @param {Scene} scene - La scène Babylon.js.
+     */
     constructor(scene) {
         this.scene = scene;
         this._initMesh();
@@ -14,10 +18,10 @@ export class Player {
         this.isDashReady = true;
         this.lastMoveDirection = new Vector3(0, 0, 1);
         this.isDashing = false;
-        this.currentDashAnim = null; // Reference to the dash animation
+        this.currentDashAnim = null; // Référence à l'animation de dash en cours
         this.audioManager = null;
 
-        // Systeme de vie
+        // Système de vie
         this.maxHealth = 10; 
         this.currentHealth = 10;
         this.isInvincible = false;
@@ -29,10 +33,18 @@ export class Player {
         this.powerTimer = 0;
     }
 
+    /**
+     * Définit le gestionnaire audio pour les effets sonores du joueur.
+     * @param {AudioManager} audioManager - L'instance du gestionnaire audio.
+     */
     setAudioManager(audioManager) {
         this.audioManager = audioManager;
     }
 
+    /**
+     * Initialise le maillage (mesh) du joueur.
+     * @private
+     */
     _initMesh() {
         this.mesh = MeshBuilder.CreateBox("yasso_body", { width: 0.8, height: 1.6, depth: 0.4 }, this.scene);
         this.mesh.position.y = 0.8;
@@ -45,6 +57,10 @@ export class Player {
         this._createDashTrail();
     }
 
+    /**
+     * Crée l'effet visuel de traînée pour le dash.
+     * @private
+     */
     _createDashTrail() {
         this.trailMesh = MeshBuilder.CreateBox("trail", { width: 0.9, height: 1.7, depth: 0.5 }, this.scene);
         this.trailMesh.parent = this.mesh;
@@ -57,8 +73,11 @@ export class Player {
         this.trailMesh.material = trailMat;
     }
 
+    /**
+     * Réinitialise l'état du joueur (position, santé, pouvoirs).
+     */
     reset() {
-        this.cancelDash(); // Stop any ongoing dash
+        this.cancelDash(); // Arrête tout dash en cours
         this.mesh.position = new Vector3(0, 0.8, 0);
         this.mesh.rotation = Vector3.Zero();
         this.lastMoveDirection = new Vector3(0, 0, 1);
@@ -70,6 +89,9 @@ export class Player {
         this.storedPower = null;
     }
 
+    /**
+     * Annule le dash en cours.
+     */
     cancelDash() {
         if (this.currentDashAnim) {
             this.currentDashAnim.stop();
@@ -79,6 +101,12 @@ export class Player {
         this._hideDashTrail();
     }
 
+    /**
+     * Vérifie si un mouvement vers la position cible est valide (pas de mur, sol existant).
+     * @param {Vector3} targetPosition - La position cible.
+     * @returns {boolean} Vrai si le mouvement est valide.
+     * @private
+     */
     _isValidMove(targetPosition) {
         const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
@@ -92,6 +120,11 @@ export class Player {
         return hitInfo.hit;
     }
 
+    /**
+     * Met à jour l'état du joueur à chaque frame.
+     * @param {InputManager} inputManager - Le gestionnaire d'entrées.
+     * @param {DataCollector} aiCollector - Le collecteur de données IA.
+     */
     update(inputManager, aiCollector) {
         // Gestion du timer de pouvoir
         if (this.activePower) {
@@ -136,14 +169,18 @@ export class Player {
         }
     }
 
+    /**
+     * Applique des dégâts au joueur.
+     * @returns {boolean} Vrai si le joueur est mort.
+     */
     takeDamage() {
         if (this.isInvincible || (this.activePower === "Sentinelle")) return false; // Invincibilité Sentinelle
 
         this.currentHealth--;
-        console.log(`YASSO HIT! Health: ${this.currentHealth}/${this.maxHealth}`);
+        console.log(`YASSO TOUCHÉ ! Santé : ${this.currentHealth}/${this.maxHealth}`);
 
         if (this.currentHealth <= 0) {
-            console.log("YASSO DESTROYED");
+            console.log("YASSO DÉTRUIT");
             return true;
         }
 
@@ -151,6 +188,10 @@ export class Player {
         return false;
     }
 
+    /**
+     * Active la période d'invincibilité temporaire après un coup.
+     * @private
+     */
     _activateInvincibility() {
         this.isInvincible = true;
 
@@ -163,11 +204,16 @@ export class Player {
                 clearInterval(blinkInterval);
                 this.mesh.material.alpha = 0.8;
                 this.isInvincible = false;
-                console.log("Invincibility ended");
+                console.log("Fin d'invincibilité");
             }
         }, this.invincibilityDuration / 10);
     }
 
+    /**
+     * Exécute une action de Dash.
+     * @param {Vector3} direction - La direction du dash.
+     * @param {DataCollector} aiCollector - Le collecteur de données IA.
+     */
     executeDash(direction, aiCollector) {
         if (!this.isDashReady || this.isDashing) return;
 
@@ -219,6 +265,10 @@ export class Player {
         setTimeout(() => { this.isDashReady = true; }, 800);
     }
 
+    /**
+     * Affiche l'effet visuel de traînée du dash.
+     * @private
+     */
     _showDashTrail() {
         if (!this.trailMesh) return;
 
@@ -237,6 +287,10 @@ export class Player {
         );
     }
 
+    /**
+     * Masque l'effet visuel de traînée.
+     * @private
+     */
     _hideDashTrail() {
         if (!this.trailMesh) return;
         this.trailMesh.material.alpha = 0;
@@ -244,18 +298,25 @@ export class Player {
 
     // --- Gestion des Pouvoirs ---
 
+    /**
+     * Collecte un pouvoir (bonus) et le stocke en attente d'activation.
+     * @param {string} type - Le type de pouvoir ("Traqueur", "Sentinelle", "Pulse").
+     */
     collectPower(type) {
         this.storedPower = type;
-        console.log(`POWER STORED: ${type}`);
-        // Petit effet visuel pour dire qu'on a ramassé un truc ?
+        console.log(`POUVOIR STOCKÉ : ${type}`);
     }
 
+    /**
+     * Active un pouvoir spécifique.
+     * @param {string} type - Le type de pouvoir à activer.
+     */
     activatePower(type) {
         this.deactivatePower(); // Reset précédent
         this.activePower = type;
         this.powerTimer = 600; // 10 secondes (à 60fps)
 
-        console.log(`POWER UP ACTIVATED: ${type}`);
+        console.log(`POWER UP ACTIVÉ : ${type}`);
 
         if (type === "Traqueur") {
             this.speed = this.baseSpeed * 1.5; // Vitesse augmentée
@@ -273,15 +334,22 @@ export class Player {
         }
     }
 
+    /**
+     * Désactive le pouvoir en cours.
+     */
     deactivatePower() {
         if (!this.activePower) return;
         
-        console.log("POWER UP ENDED");
+        console.log("FIN DU POWER UP");
         this.activePower = null;
         this.speed = this.baseSpeed;
         this.mesh.material.emissiveColor = new Color3(0, 1, 1); // Retour au Cyan
     }
 
+    /**
+     * Déclenche l'effet d'explosion du pouvoir Pulse.
+     * @private
+     */
     _triggerPulseExplosion() {
         // Effet visuel
         const particleSystem = new ParticleSystem("pulseExplosion", 50, this.scene);
@@ -300,13 +368,12 @@ export class Player {
         if (this.audioManager) {
             this.audioManager.playSound("explosion");
         }
-
-        // Logique de dégâts de zone (simple raycast autour ou sphere check)
-        // Pour simplifier, on suppose que l'EntityManager gère les collisions, 
-        // mais ici on pourrait ajouter une logique pour tuer les ennemis proches.
-        // Pour l'instant, c'est surtout visuel et défensif.
     }
 
+    /**
+     * Récupère les données de santé actuelles.
+     * @returns {Object} Objet contenant current, max et percentage.
+     */
     getHealthData() {
         return {
             current: this.currentHealth,
@@ -315,6 +382,10 @@ export class Player {
         };
     }
 
+    /**
+     * Récupère les données de dash actuelles.
+     * @returns {Object} Objet contenant isReady et isDashing.
+     */
     getDashData() {
         return {
             isReady: this.isDashReady,

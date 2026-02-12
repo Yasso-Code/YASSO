@@ -4,6 +4,9 @@
  * Respecte le principe de Responsabilité Unique (SRP) en ne gérant que les données.
  */
 export class DataCollector {
+    /**
+     * Initialise le collecteur de données.
+     */
     constructor() {
         /**
          * @property {Object} data - Stocke les compteurs de mouvements et d'actions.
@@ -76,12 +79,20 @@ export class DataCollector {
         this.actionCounter += 2;
     }
 
+    /**
+     * Enregistre l'élimination d'un ennemi.
+     * Augmente significativement le compteur d'actions.
+     */
     recordKill() {
         this.data.enemiesKilled++;
         this.actionCounter += 5;
         console.log("📊 IA : Ennemi éliminé");
     }
 
+    /**
+     * Enregistre la fin d'une salle et le nombre d'ennemis ignorés.
+     * @param {number} enemiesRemaining - Le nombre d'ennemis restants dans la salle.
+     */
     recordRoomCompletion(enemiesRemaining) {
         this.data.roomsCleared++;
         this.data.enemiesSkipped += enemiesRemaining;
@@ -111,8 +122,8 @@ export class DataCollector {
     }
 
     /**
-     * Enregistre une action spécifique (ex: dash_kill)
-     * @param {string} actionType 
+     * Enregistre une action spécifique (ex: dash_kill).
+     * @param {string} actionType - Le type d'action à enregistrer.
      */
     recordAction(actionType) {
         if (actionType === "dash_kill") {
