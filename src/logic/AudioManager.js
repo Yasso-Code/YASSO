@@ -3,6 +3,11 @@ import {
     Engine
 } from "@babylonjs/core";
 
+/**
+ * ✅ AudioManager pour Babylon.js
+ * Utilise l'API Sound standard
+ */
+
 const MUSIC_CONFIG = {
     ambient: { url: "/assets/musics/background_ambient.mp3", volume: 0.3 },
     boss: { url: "/assets/musics/background_boss.mp3", volume: 0.5 }

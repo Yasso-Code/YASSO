@@ -3,22 +3,31 @@ import { FloorConfig } from "./dungeon/FloorConfig.js";
 import { FloorGenerator } from "./dungeon/FloorGenerator.js";
 import { RoomManager } from "./dungeon/RoomManager.js";
 
+/**
+ * @class LevelManager
+ * @description Orchestre la progression à travers les étages et les salles.
+ */
 export class LevelManager {
     constructor(scene, onLevelLoaded, onRoomCleared, onGameWon) {
         this.scene = scene;
-        this.onLevelLoaded = onLevelLoaded;
+        this.onLevelLoaded = onLevelLoaded; // Callback vers GameManager._onLevelLoaded
         this.onRoomCleared = onRoomCleared;
         this.onGameWon = onGameWon;
 
-        this.currentFloor = 1; // ✅ Commencer à 1 (aligné sur FloorConfig)
+        // État actuel
+        this.currentFloor = 1;
         this.currentRoomIndex = 0;
         this.currentFloorConfig = null;
         this.currentRoom = null;
 
+        // Managers
         this.roomManager = new RoomManager(scene);
         this.entityManager = null;
 
+        // État du jeu
         this.roomClearedTriggered = false;
+
+        // Stockage temporaire
         this.exitPlatformLocation = null;
         this.bossExitPosition = null;
 
@@ -26,10 +35,13 @@ export class LevelManager {
         this.hudManager = null;
         this.light = null;
 
-        // ✅ AJOUT : Délai de sécurité pour éviter le saut de salle immédiat
+        // ✅ Protection contre le saut de salle immédiat (500ms)
         this.spawnProtectionTime = 0;
     }
 
+    /**
+     * ✅ RÉSOLUT L'ERREUR : Définit l'EntityManager
+     */
     setEntityManager(entityManager) {
         this.entityManager = entityManager;
     }
@@ -51,9 +63,12 @@ export class LevelManager {
         this.scene.fogColor = new Color3(0.01, 0.01, 0.02);
     }
 
+    /**
+     * Démarre un nouvel étage et réinitialise l'index à la Salle 1
+     */
     loadFloor(floorNumber, aiData = null) {
         this.currentFloor = floorNumber;
-        this.currentRoomIndex = 0; // ✅ Reset forcé de l'index à 0
+        this.currentRoomIndex = 0; // ✅ Force le retour à la salle 1
         this.currentFloorConfig = FloorConfig.getFloor(floorNumber);
 
         console.log(`--- CHARGEMENT ÉTAGE ${floorNumber}: ${this.currentFloorConfig.name} ---`);
@@ -66,12 +81,15 @@ export class LevelManager {
         this.loadRoom(0, aiData);
     }
 
+    /**
+     * Charge une salle spécifique
+     */
     loadRoom(roomIndex, aiData = null) {
         this.currentRoomIndex = roomIndex;
         this.currentFloorConfig = FloorConfig.getFloor(this.currentFloor);
         this.roomClearedTriggered = false;
 
-        // ✅ Activer la protection de spawn (500ms) pour ignorer les collisions immédiates
+        // ✅ Active la protection (bloque les portails pendant 0.5s)
         this.spawnProtectionTime = Date.now() + 500;
 
         this.currentRoom = FloorGenerator.generateRoom(
@@ -84,16 +102,13 @@ export class LevelManager {
         this.roomManager.loadRoom(this.currentRoom, this.currentFloorConfig);
         this.exitPlatformLocation = this.currentRoom.getExitPlatform();
 
+        // Création immédiate du portail de sortie
         if (this.exitPlatformLocation) {
-            this._createExitPortal(
-                this.exitPlatformLocation,
-                this.currentRoomIndex,
-                this.currentFloorConfig
-            );
+            this._createExitPortal(this.exitPlatformLocation, this.currentRoomIndex, this.currentFloorConfig);
         }
 
+        // Déclenche le spawn via le callback du GameManager
         this._spawnEnemiesForRoom(this.currentRoom, this.currentFloorConfig);
-        console.log(`✨ Salle ${this.currentRoomIndex + 1}/${this.currentFloorConfig.rooms} chargée.`);
     }
 
     _createExitPortal(exitPlatform, roomIndex, config) {
@@ -116,21 +131,15 @@ export class LevelManager {
     }
 
     _spawnEnemiesForRoom(room, floorConfig) {
-        if (!this.entityManager) return;
-
         const enemyTypes = FloorGenerator.getEnemyTypesForRoom(this.currentFloor, this.currentRoomIndex);
-        if (!room.spawnPoints || room.spawnPoints.length === 0) return;
-
-        this.entityManager.clearAll();
-
-        room.spawnPoints.forEach((pos, index) => {
-            const type = enemyTypes[index % enemyTypes.length];
-            this.entityManager.spawnEnemy(type, pos);
-        });
+        // Appelle GameManager._onLevelLoaded qui gère le spawn et le debug
+        if (this.onLevelLoaded) {
+            this.onLevelLoaded(room.spawnPoints, enemyTypes);
+        }
     }
 
     checkExitInteraction(player, entityManager, aiData) {
-        // ✅ Bloquer l'interaction si on vient juste de spawn
+        // ✅ Empêche de quitter la salle si on vient de spawn
         if (Date.now() < this.spawnProtectionTime) return;
 
         if (this.checkPortalInteraction(player, entityManager, aiData)) return;
@@ -152,7 +161,7 @@ export class LevelManager {
     }
 
     checkPortalInteraction(player, entityManager, aiData) {
-        // ✅ Bloquer l'interaction si on vient juste de spawn
+        // ✅ Empêche de quitter la salle si on vient de spawn
         if (Date.now() < this.spawnProtectionTime) return;
 
         for (const portal of this.roomManager.portals) {
@@ -165,7 +174,7 @@ export class LevelManager {
                     aiData.recordRoomCompletion(entityManager.getEnemyCount());
                 }
 
-                // Téléportation au spawn de la nouvelle salle
+                // Repositionnement au spawn de la nouvelle salle
                 if (this.currentRoom && this.currentRoom.spawnPosition) {
                     player.mesh.position = this.currentRoom.spawnPosition.clone();
                 } else {
@@ -179,7 +188,6 @@ export class LevelManager {
         return false;
     }
 
-    // ... (reste des méthodes identiques)
     onRoomEnemiesCleared() {
         if (this.roomClearedTriggered) return;
         this.roomClearedTriggered = true;
@@ -195,7 +203,9 @@ export class LevelManager {
     }
 
     onBossDefeated() {
-        if (this.bossExitPosition) this.roomManager.createGrandPortal(this.bossExitPosition);
+        if (this.bossExitPosition) {
+            this.roomManager.createGrandPortal(this.bossExitPosition);
+        }
     }
 
     applyGlitchEffect() {
