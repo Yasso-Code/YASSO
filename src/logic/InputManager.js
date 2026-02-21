@@ -1,21 +1,29 @@
 /**
  * @class InputManager
- * @description Gère les entrées
+ * @description Gère les entrées clavier et communique avec le DataCollector pour l'IA.
  */
 export class InputManager {
     constructor() {
         this.keys = {
-            forward: false,  // Z
-            left: false,     // Q
-            backward: false, // S
-            right: false,    // D
-            dash: false,     // Space
-            zoomIn: false,   // W
-            zoomOut: false,  // X
-            interact: false  // E
+            forward: false,
+            left: false,
+            backward: false,
+            right: false,
+            dash: false,
+            zoomIn: false,
+            zoomOut: false,
+            interact: false
         };
-        this.interactPressedOnce = false; // Pour éviter le spam
+        this.interactPressedOnce = false;
+        this.aiCollector = null; // Sera injecté via GameManager
         this._initListeners();
+    }
+
+    /**
+     * Permet d'injecter le DataCollector après l'initialisation
+     */
+    setAICollector(aiCollector) {
+        this.aiCollector = aiCollector;
     }
 
     _initListeners() {
@@ -29,41 +37,51 @@ export class InputManager {
     }
 
     _handleKey(key, isPressed) {
+        const ai = this.aiCollector;
+
         switch (key) {
-            // ✅ WASD pour le mouvement
-            case "z": this.keys.forward = isPressed; break;
-            case "q": this.keys.left = isPressed; break;
-            case "s": this.keys.backward = isPressed; break;
-            case "d": this.keys.right = isPressed; break;
-            
-            // Dash
-            case " ": this.keys.dash = isPressed; break;
-            
-            // Pour le zoom
-            case "w": this.keys.zoomIn = isPressed; break;
+            // Mouvements ZQSD (ou WASD selon config)
+            case "w":
+                this.keys.forward = isPressed;
+                if (isPressed && ai) ai.recordMove("up");
+                break;
+            case "a":
+                this.keys.left = isPressed;
+                if (isPressed && ai) ai.recordMove("left");
+                break;
+            case "s":
+                this.keys.backward = isPressed;
+                if (isPressed && ai) ai.recordMove("down");
+                break;
+            case "d":
+                this.keys.right = isPressed;
+                if (isPressed && ai) ai.recordMove("right");
+                break;
+
+            // Dash (Espace)
+            case " ":
+                this.keys.dash = isPressed;
+                if (isPressed && ai) ai.recordDash();
+                break;
+
+            // Zoom (Z / X pour correspondre à ton InputManager précédent)
+            case "z": this.keys.zoomIn = isPressed; break;
             case "x": this.keys.zoomOut = isPressed; break;
 
-            // Interaction
-            case "e": 
+            // Interaction (E)
+            case "e":
                 if (isPressed && !this.keys.interact) {
                     this.interactPressedOnce = true;
+                    if (ai) ai.recordBonusCollected();
                 }
-                this.keys.interact = isPressed; 
+                this.keys.interact = isPressed;
                 break;
         }
     }
 
-    isZoomInTriggered() {
-        return this.keys.zoomIn;
-    }
-
-    isZoomOutTriggered() {
-        return this.keys.zoomOut;
-    }
-
-    isDashTriggered() {
-        return this.keys.dash;
-    }
+    isZoomInTriggered() { return this.keys.zoomIn; }
+    isZoomOutTriggered() { return this.keys.zoomOut; }
+    isDashTriggered() { return this.keys.dash; }
 
     isInteractTriggered() {
         if (this.interactPressedOnce) {

@@ -83,6 +83,28 @@
                 ★ BONUS ACTIF
             </div>
         </div>
+
+        <!-- ✅ HUD TEST -->
+        <div id="debug-monitor"
+             style="position: absolute; top: 20px; right: 20px; font-family: 'Courier New', monospace; color: #00ff00; pointer-events: none; background: rgba(0, 20, 0, 0.7); padding: 15px; border: 1px solid #00ff00; font-size: 11px; display: none;">
+            <div style="border-bottom: 1px solid #00ff00; margin-bottom: 10px; font-weight: bold;">[ SYSTEM MONITOR : DATA_COLLECTOR ]</div>
+
+            <div id="monitor-mobility">
+                MOVES: <span id="m-moves">0</span><br>
+                DASHES: <span id="m-dash">0</span> (Avg: <span id="m-dash-avg">0</span>ms)
+            </div>
+
+            <div id="monitor-combat" style="margin-top: 10px; color: #ff5555;">
+                KILLS: <span id="m-kills">0</span> (Streak: <span id="m-streak">0</span>)<br>
+                DASH KILLS: <span id="m-dash-kills">0</span><br>
+                DAMAGE TAKEN: <span id="m-damage">0</span>
+            </div>
+
+            <div id="monitor-ai" style="margin-top: 10px; color: #ffff00;">
+                ACTION COUNTER: <span id="m-counter">0</span> / 40<br>
+                AGGRESSION LEVEL: <span id="m-aggr">0.50</span>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="src/main.js"></script>

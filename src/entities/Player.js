@@ -18,8 +18,8 @@ export class Player {
         this.audioManager = null;
 
         // Systeme de vie
-        this.maxHealth = 10; 
-        this.currentHealth = 10;
+        this.maxHealth = 30;
+        this.currentHealth = 30;
         this.isInvincible = false;
         this.invincibilityDuration = 1500;
 

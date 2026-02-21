@@ -1,107 +1,130 @@
 /**
  * @class DataCollector
- * @description Collecte les données sur les actions du joueur pour permettre à l'IA de s'adapter.
- * Respecte le principe de Responsabilité Unique (SRP) en ne gérant que les données.
+ * @description Collecte exhaustive des métriques comportementales pour l'IA.
+ * Capture non seulement "quoi", mais aussi "comment" Yasso joue.
  */
 export class DataCollector {
     constructor() {
-        /**
-         * @property {Object} data - Stocke les compteurs de mouvements et d'actions.
-         */
-        this.data = { 
-            movements: { left: 0, right: 0, up: 0, down: 0 }, 
-            dashCount: 0,
-            enemiesKilled: 0,
-            enemiesSkipped: 0,
-            roomsCleared: 0
-        };
-        
-        /**
-         * @property {number} actionCounter - Compteur global pour déclencher l'adaptation.
-         */
-        this.actionCounter = 0;
-        
-        /**
-         * @property {number} threshold - Seuil d'actions avant adaptation.
-         * Augmenté à 50 pour éviter le déclenchement trop rapide.
-         */
-        this.threshold = 50;
-
-        /**
-         * @property {number} lastMoveTime - Timestamp du dernier mouvement enregistré pour éviter le spam.
-         */
-        this.lastMoveTime = 0;
+        this.reset();
+        this.threshold = 40; // Seuil ajusté pour une analyse plus fine
     }
 
-    /**
-     * Réinitialise les données collectées (ex: nouvelle partie).
-     */
     reset() {
-        this.data = { 
-            movements: { left: 0, right: 0, up: 0, down: 0 }, 
-            dashCount: 0,
-            enemiesKilled: 0,
-            enemiesSkipped: 0,
-            roomsCleared: 0
+        this.data = {
+            // --- MOBILITÉ ---
+            movements: { left: 0, right: 0, up: 0, down: 0 },
+            dash: {
+                count: 0,
+                lastTime: 0,
+                averageInterval: 0, // Détecte le spam de dash
+                distanceTotal: 0
+            },
+
+            // --- COMBAT & AGRESSION ---
+            combat: {
+                enemiesKilled: 0,
+                enemiesSkipped: 0,
+                damageTaken: 0,
+                shotsFired: 0, // Si applicable plus tard
+                dashKills: 0,  // Kills techniques
+                lastKillTime: 0,
+                killStreak: 0  // Détecte les phases d'agression intense
+            },
+
+            // --- PERFORMANCE ---
+            session: {
+                startTime: Date.now(),
+                roomsCleared: 0,
+                healthAtRoomStart: 1.0,
+                powerUpsCollected: 0
+            }
         };
+
         this.actionCounter = 0;
         this.lastMoveTime = 0;
     }
 
     /**
-     * Enregistre un mouvement directionnel.
-     * Ajout d'un cooldown pour éviter de compter chaque frame comme une action.
-     * @param {string} dir - La direction ("left", "right", "up", "down").
+     * Enregistre un mouvement avec calcul de fréquence.
      */
     recordMove(dir) {
         const now = Date.now();
-        // On n'enregistre le mouvement que toutes les 500ms si la touche reste appuyée
-        if (now - this.lastMoveTime < 500) {
-            return;
-        }
+        if (now - this.lastMoveTime < 100) return; // Précision accrue (100ms au lieu de 500ms)
 
         if (this.data.movements[dir] !== undefined) {
             this.data.movements[dir]++;
-            this.actionCounter++;
+            this.actionCounter += 0.5; // Le mouvement pèse moins que le combat
             this.lastMoveTime = now;
         }
     }
 
     /**
-     * Enregistre l'utilisation d'un dash.
-     * Le dash a un poids plus important dans le compteur d'actions.
+     * Enregistre un dash et calcule le rythme (Spam vs Précision).
      */
     recordDash() {
-        this.data.dashCount++;
+        const now = Date.now();
+        const interval = now - this.data.dash.lastTime;
+
+        // Calcul de la moyenne glissante de l'intervalle entre les dashs
+        this.data.dash.averageInterval = (this.data.dash.averageInterval + interval) / 2;
+
+        this.data.dash.count++;
+        this.data.dash.lastTime = now;
         this.actionCounter += 2;
     }
 
-    recordKill() {
-        this.data.enemiesKilled++;
-        this.actionCounter += 5;
-        console.log("📊 IA : Ennemi éliminé");
-    }
+    /**
+     * Enregistre un kill et gère le multiplicateur d'agression.
+     */
+    recordKill(isDashKill = false) {
+        const now = Date.now();
 
-    recordRoomCompletion(enemiesRemaining) {
-        this.data.roomsCleared++;
-        this.data.enemiesSkipped += enemiesRemaining;
-        console.log(`📊 IA : Salle terminée. Ennemis ignorés: ${enemiesRemaining}`);
+        // Gestion du streak (Kills à moins de 3 secondes)
+        if (now - this.data.combat.lastKillTime < 3000) {
+            this.data.combat.killStreak++;
+        } else {
+            this.data.combat.killStreak = 1;
+        }
+
+        this.data.combat.enemiesKilled++;
+        this.data.combat.lastKillTime = now;
+
+        // ✅ FORCE LE COMPTAGE TECHNIQUE
+        if (isDashKill === true) {
+            this.data.combat.dashKills++;
+            this.actionCounter += 7; // Les dash kills font progresser l'IA plus vite
+        } else {
+            this.actionCounter += 4;
+        }
     }
 
     /**
-     * Calcule le style de jeu du joueur.
-     * @returns {number} Valeur entre 0 (Furtif) et 1 (Bourrin).
+     * Enregistre les dégâts reçus pour le profil de vulnérabilité.
+     */
+    recordDamage(amount) {
+        this.data.combat.damageTaken += amount;
+        this.actionCounter += 3; // L'IA doit réagir si le joueur prend cher
+    }
+
+    recordBonusCollected() {
+        this.data.session.powerUpsCollected++;
+        this.actionCounter += 5;
+    }
+
+    /**
+     * Analyseur d'agression complexe.
+     * @returns {number} 0 (Passif/Lent) à 1 (Elite/Hyper-agressif)
      */
     getAggressionLevel() {
-        const totalEncountered = this.data.enemiesKilled + this.data.enemiesSkipped;
-        if (totalEncountered === 0) return 0.5; // Neutre au début
-        return this.data.enemiesKilled / totalEncountered;
+        const totalEncountered = this.data.combat.enemiesKilled + this.data.combat.enemiesSkipped;
+        if (totalEncountered === 0) return 0.5;
+
+        const killRatio = this.data.combat.enemiesKilled / totalEncountered;
+        const streakBonus = Math.min(this.data.combat.killStreak / 5, 0.5);
+
+        return Math.min(killRatio + streakBonus, 1.0);
     }
 
-    /**
-     * Vérifie si l'IA doit s'adapter en fonction du seuil d'actions.
-     * @returns {boolean} True si le seuil est atteint.
-     */
     shouldAdapt() {
         if (this.actionCounter >= this.threshold) {
             this.actionCounter = 0;
@@ -111,14 +134,29 @@ export class DataCollector {
     }
 
     /**
-     * Enregistre une action spécifique (ex: dash_kill)
-     * @param {string} actionType 
+     * Méthode de secours pour la compatibilité descendante
      */
-    recordAction(actionType) {
-        if (actionType === "dash_kill") {
-            // On peut augmenter le compteur d'actions pour accélérer l'adaptation de l'IA
-            this.actionCounter += 5; 
-            console.log("📊 IA : Pattern d'attaque détecté (Dash Kill)");
+    recordAction(type) {
+        if (type === "dash_kill") {
+            this.recordKill(true);
+        } else if (type === "kills") {
+            this.recordKill(false);
+        } else {
+            this.actionCounter++;
         }
+    }
+
+    /**
+     * Enregistre la complétion d'une salle et analyse les ennemis restants.
+     * @param {number} remainingEnemies - Nombre d'ennemis ignorés/vivants
+     */
+    recordRoomCompletion(remainingEnemies = 0) {
+        this.data.session.roomsCleared++;
+        this.data.combat.enemiesSkipped += remainingEnemies;
+
+        // Un bonus d'action pour avoir terminé la salle
+        this.actionCounter += 10;
+
+        console.log(`📊 IA : Salle complétée. Total: ${this.data.session.roomsCleared}`);
     }
 }
