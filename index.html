@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>YASSO - GOW 2026</title>
+    <link rel="stylesheet" href="src/style.css">
+</head>
+
+<body>
+    <canvas id="renderCanvas"></canvas>
+
+    <!-- Interface Utilisateur (UI) -->
+    <div id="ui-layer">
+        <!-- Écran de Démarrage -->
+        <div id="start-screen" class="screen active">
+            <h1>YASSO</h1>
+            <p>Neural Network Infiltration</p>
+            <div class="controls-hint">
+                <p>Déplacement : WASD</p>
+                <p>Combat : ESPACE (Dash à travers les ennemis)</p>
+                <p>Interaction : E (Activer les bonus)</p>
+                <p>Zoom : Q / E</p>
+            </div>
+            <p class="blink">Appuyez sur ENTRÉE pour commencer</p>
+        </div>
+
+        <!-- Écran Game Over -->
+        <div id="game-over-screen" class="screen">
+            <h1 style="color: orangered;">CRITICAL ERROR</h1>
+            <p>System Failure: YASSO.exe a cessé de fonctionner</p>
+            <p class="blink">Appuyez sur ENTRÉE pour redémarrer</p>
+        </div>
+
+        <!-- Écran de Victoire -->
+        <div id="game-won-screen" class="screen">
+            <h1 style="color: #00ff00; text-shadow: 0 0 20px #00ff00;">MISSION ACCOMPLIE</h1>
+            <p>Le Nexus a été purifié. Le réseau est sécurisé.</p>
+            <div style="margin: 30px 0;">
+                <p>Score IA : <span id="final-score">100%</span></p>
+                <p>Temps : <span id="final-time">00:00</span></p>
+            </div>
+            <button id="restart-btn" class="cyber-btn">REJOUER</button>
+        </div>
+
+        <!-- ✅ HUD COMPLET -->
+        <div id="nexus-hud"
+            style="position: absolute; top: 20px; left: 20px; font-family: 'Courier New', monospace; color: #00ffff; pointer-events: none; display: none;">
+            
+            <!-- ✅ NOUVEAU: Barre de vie -->
+            <div style="margin-bottom: 15px;">
+                <div style="font-size: 14px; letter-spacing: 2px; margin-bottom: 5px;">
+                    > YASSO INTEGRITY : <span id="health-text">10/10</span>
+                </div>
+                <div style="width: 250px; height: 12px; border: 1px solid #00ff00; background: rgba(0, 255, 0, 0.1);">
+                    <div id="health-bar-fill"
+                        style="width: 100%; height: 100%; background: #00ff00; box-shadow: 0 0 10px #00ff00; transition: width 0.3s, background 0.3s;"></div>
+                </div>
+            </div>
+
+            <!-- Analyse IA (existant) -->
+            <div style="font-size: 14px; letter-spacing: 2px;">> ANALYSE SYSTEME : <span id="nexus-status">STABLE</span>
+            </div>
+            <div
+                style="width: 250px; height: 10px; border: 1px solid #00ffff; margin-top: 5px; background: rgba(0, 255, 255, 0.1);">
+                <div id="nexus-bar-fill"
+                    style="width: 0%; height: 100%; background: #00ffff; box-shadow: 0 0 10px #00ffff;"></div>
+            </div>
+            <div id="nexus-pattern"
+                style="font-size: 11px; margin-top: 5px; color: #ff00ff; text-transform: uppercase;">Pattern :
+                recherche...</div>
+
+            <!-- ✅ NOUVEAU: Indicateur de dash -->
+            <div id="dash-indicator" 
+                style="font-size: 13px; margin-top: 15px; letter-spacing: 1px; font-weight: bold;">
+                ⚡ DASH READY
+            </div>
+
+            <!-- Indicateur de Bonus -->
+            <div id="power-indicator" 
+                style="font-size: 13px; margin-top: 10px; letter-spacing: 1px; font-weight: bold; color: yellow; display: none;">
+                ★ BONUS ACTIF
+            </div>
+        </div>
+
+        <!-- ✅ HUD TEST -->
+        <div id="debug-monitor"
+             style="position: absolute; top: 20px; right: 20px; font-family: 'Courier New', monospace; color: #00ff00; pointer-events: none; background: rgba(0, 20, 0, 0.7); padding: 15px; border: 1px solid #00ff00; font-size: 11px; display: none;">
+            <div style="border-bottom: 1px solid #00ff00; margin-bottom: 10px; font-weight: bold;">[ SYSTEM MONITOR : DATA_COLLECTOR ]</div>
+
+            <div id="monitor-mobility">
+                MOVES: <span id="m-moves">0</span><br>
+                DASHES: <span id="m-dash">0</span> (Avg: <span id="m-dash-avg">0</span>ms)
+            </div>
+
+            <div id="monitor-combat" style="margin-top: 10px; color: #ff5555;">
+                KILLS: <span id="m-kills">0</span> (Streak: <span id="m-streak">0</span>)<br>
+                DASH KILLS: <span id="m-dash-kills">0</span><br>
+                DAMAGE TAKEN: <span id="m-damage">0</span>
+            </div>
+
+            <div id="monitor-ai" style="margin-top: 10px; color: #ffff00;">
+                ACTION COUNTER: <span id="m-counter">0</span> / 40<br>
+                AGGRESSION LEVEL: <span id="m-aggr">0.50</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+
+</html>
