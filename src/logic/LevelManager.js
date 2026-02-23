@@ -41,24 +41,8 @@ export class LevelManager {
 
     /**
      * ═══════════════════════════════════════════════════════════════
-     * 🎮 SPAWN PLAYER - MÉTHODE UNIQUE CENTRALISÉE
+     *  SPAWN PLAYER - MÉTHODE UNIQUE CENTRALISÉE
      * ═══════════════════════════════════════════════════════════════
-     *
-     * SINGLE SOURCE OF TRUTH pour TOUS les spawns du joueur.
-     *
-     * Appelée lors de :
-     * - Démarrage du jeu
-     * - Changement de salle
-     * - Changement d'étage
-     * - Respawn après mort (si implémenté)
-     *
-     * ✅ Garantit :
-     * - Pas de dash résiduel
-     * - Pas de vitesse résiduelle
-     * - Pas de téléportation parasite
-     * - Pas de collision fantôme
-     * - Protection anti-portail active
-     * - Position correcte TOUJOURS
      */
     spawnPlayer(player, position = null) {
         // ─────────────────────────────────────────────────────────
@@ -200,6 +184,15 @@ export class LevelManager {
 
     checkExitInteraction(player, entityManager, aiData) {
         // ✅ Empêche de quitter la salle si on vient de spawn
+
+        // Bloque la sortie si un mini-boss est en vie
+        if (this.currentFloor === 3 && this.currentRoomIndex === 2) {
+            if (this.entityManager.getEnemyCount() > 0) {
+                console.log("🚫 Mini-boss still alive — exit locked");
+                return;
+            }
+        }
+
         if (Date.now() < this.spawnProtectionTime) return;
 
         if (this.checkPortalInteraction(player, entityManager, aiData)) return;
@@ -245,8 +238,27 @@ export class LevelManager {
     onRoomEnemiesCleared() {
         if (this.roomClearedTriggered) return;
         this.roomClearedTriggered = true;
+
+        // ─────────────────────────────────────────────
+        // MINI-BOSS : Salle 3-3 (Floor 3, roomIndex 2)
+        // ─────────────────────────────────────────────
+        if (this.currentFloor === 3 && this.currentRoomIndex === 2) {
+            console.log("⚠️ MINI-BOSS: SentinelleElite incoming!");
+
+            // Spawn du mini-boss
+            const bossPos = this.currentRoom.spawnPosition.clone();
+            bossPos.y = 1;
+
+            this.entityManager.spawnEnemy("SentinelleElite", bossPos);
+
+            // On NE déclenche PAS la sortie
+            return;
+        }
+
+        // Salle normale → comportement standard
         if (this.onRoomCleared) this.onRoomCleared(this.currentRoomIndex);
     }
+
 
     checkBonusInteraction(player) {
         if (this.roomManager) this.roomManager.checkInteractions(player);

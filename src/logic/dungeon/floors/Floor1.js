@@ -30,15 +30,24 @@ export class Floor1 {
             room.addPlatform(new Vector3(0, 0, -i * spacing));
         }
 
+        // Spawn joueur
         room.setSpawnPosition(new Vector3(0, 1, -12));
-        room.addSpawnPoint(new Vector3(0, 1, 12));
+
+        // 5 Traqueurs
+        room.addSpawnPoint(new Vector3(0, 1, 12));   // Centre Nord
+        room.addSpawnPoint(new Vector3(8, 1, 6));    // Nord-Est
+        room.addSpawnPoint(new Vector3(-8, 1, 6));   // Nord-Ouest
+        room.addSpawnPoint(new Vector3(8, 1, -6));   // Sud-Est
+        room.addSpawnPoint(new Vector3(-8, 1, -6));  // Sud-Ouest
+
     }
 
     // SALLE 2 — DISQUE COMPACT (Taille réduite)
     static _room2_DoubleRing(room) {
         const spacing = 4;
-        const outerRadius = 5; // Réduit pour supprimer les zones vides inutiles
+        const outerRadius = 5;
 
+        // Disque plein
         for (let x = -outerRadius; x <= outerRadius; x++) {
             for (let z = -outerRadius; z <= outerRadius; z++) {
                 if (x * x + z * z <= outerRadius * outerRadius) {
@@ -47,9 +56,19 @@ export class Floor1 {
             }
         }
 
+        // Spawn joueur
         room.setSpawnPosition(new Vector3(0, 1, -16));
-        room.addSpawnPoint(new Vector3(0, 1, 16));
+
+        // ─────────────────────────────────────────────
+        // 5 ENNEMIS : 3 Traqueurs + 2 Sentinelles
+        // ─────────────────────────────────────────────
+        room.addSpawnPoint(new Vector3(0, 1, 12));     // Centre Nord
+        room.addSpawnPoint(new Vector3(8, 1, 6));      // Nord-Est
+        room.addSpawnPoint(new Vector3(-8, 1, 6));     // Nord-Ouest
+        room.addSpawnPoint(new Vector3(6, 1, -4));     // Sud-Est
+        room.addSpawnPoint(new Vector3(-6, 1, -4));    // Sud-Ouest
     }
+
 
     // ─────────────────────────────────────────────
 // SALLE 3 — FUSION SALLE 1 + SALLE 2 (réduite, sans trous)
@@ -58,10 +77,10 @@ export class Floor1 {
         const spacing = 4;
 
         // Rayon du disque principal (réduit)
-        const outerRadius = 5;   // ⬅️ réduit de 7 → 5
+        const outerRadius = 5;
 
         // Rayon du cercle intérieur (réduit)
-        const innerRadius = 2;   // ⬅️ réduit de 3 → 2
+        const innerRadius = 2;
 
         // ─────────────────────────────────────────────
         // 1) Disque principal (cercle plein)
@@ -99,7 +118,14 @@ export class Floor1 {
         // 4) Spawn joueur / ennemis (ajusté)
         // ─────────────────────────────────────────────
         room.setSpawnPosition(new Vector3(0, 1, -20));  // ⬅️ réduit
+
         room.addSpawnPoint(new Vector3(0, 1, 20));      // ⬅️ réduit
+        room.addSpawnPoint(new Vector3(0, 1, 12));     // Centre Nord
+        room.addSpawnPoint(new Vector3(8, 1, 6));      // Nord-Est
+        room.addSpawnPoint(new Vector3(-8, 1, 6));     // Nord-Ouest
+        room.addSpawnPoint(new Vector3(6, 1, -4));     // Sud-Est
+        room.addSpawnPoint(new Vector3(6, 1, -4));
+        room.addSpawnPoint(new Vector3(-6, 1, -4));    // Sud-Ouest
     }
 
 }

@@ -40,9 +40,21 @@ export class FloorGenerator {
      */
     static getEnemyTypesForRoom(floorNumber, roomIndex) {
         const progression = {
-            1: [["Traqueur"], ["Traqueur"], ["Traqueur", "Sentinelle"]],
-            2: [["Traqueur", "Sentinelle"], ["Traqueur", "Sentinelle", "Pulse"], ["Traqueur", "Sentinelle", "Pulse"]],
-            3: [["Sentinelle", "Pulse"], ["Traqueur", "Pulse", "Drone"], ["Traqueur", "Sentinelle", "Drone"]],
+                1: [
+                    ["Traqueur"],
+                    ["Traqueur", "Sentinelle"],
+                    ["Traqueur", "Sentinelle"]
+                ],
+                2: [
+                    ["Traqueur", "Drone"],
+                    ["Sentinelle", "Pulse"],
+                    ["Traqueur", "Sentinelle", "Pulse"]
+                ],
+                3: [
+                    ["Sentinelle", "Pulse"],
+                    ["Traqueur", "Pulse", "Drone"],
+                    ["Traqueur", "Sentinelle", "Drone"] // Salle 3-3 (mini-boss)
+                ],
             4: [["Sentinelle", "Pulse", "Drone"], ["Traqueur", "Sentinelle", "Pulse", "Tank"], ["Traqueur", "Sentinelle", "Pulse", "Parasite"]],
             5: [["NEXUS"]]
         };

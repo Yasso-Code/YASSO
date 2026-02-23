@@ -5,6 +5,8 @@ import { Drone } from "../entities/types/Drone.js";
 import { Tank } from "../entities/types/Tank.js";
 import { Parasite } from "../entities/types/Parasite.js";
 import { NexusBoss } from "../entities/types/NexusBoss.js";
+import { SentinelleElite } from "../entities/types/SentinelleElite.js";
+
 
 /**
  * @class EntityManager
@@ -54,16 +56,27 @@ export class EntityManager {
                 enemy = new Pulse(this.scene, position);
                 break;
 
-            case "Drone": enemy = new Drone(this.scene, position); break;
-            case "Tank": enemy = new Tank(this.scene, position); break;
-            case "Parasite": enemy = new Parasite(this.scene, position); break;
+            case "Drone":
+                enemy = new Drone(this.scene, position);
+                break;
+
+            case "Tank":
+                enemy = new Tank(this.scene, position);
+                break;
+
+            case "Parasite":
+                enemy = new Parasite(this.scene, position);
+                break;
+
+            case "SentinelleElite":
+                enemy = new SentinelleElite(this.scene, position);
+                break;
 
             case "NEXUS":
                 enemy = new NexusBoss(this.scene, position);
                 break;
 
             case "Mix":
-                // Pour les étages mixtes, spawn aléatoire
                 const types = ["Traqueur", "Sentinelle", "Pulse"];
                 const randomType = types[Math.floor(Math.random() * types.length)];
                 return this.spawnEnemy(randomType, position);
@@ -72,6 +85,7 @@ export class EntityManager {
                 console.warn(`Type d'ennemi inconnu: ${type}, spawn Traqueur par défaut`);
                 enemy = new Traqueur(this.scene, position);
         }
+
 
         this.enemies.push(enemy);
         console.log(`✅ ${type} spawned at (${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)})`);
