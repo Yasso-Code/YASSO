@@ -3,8 +3,6 @@ import "@babylonjs/loaders";
 import { GameManager } from "./core/GameManager.js";
 
 /**
- * @class Game
- * @description Bootstrap - Lance le moteur et instancie le GameManager
  *
  * Ce fichier doit être MINIMAL :
  * - Créer le moteur Babylon.js
@@ -26,7 +24,6 @@ class Game {
 
     /**
      * Initialise le moteur Babylon.js
-     * @private
      */
     _initEngine() {
         this.canvas = document.getElementById("renderCanvas");
@@ -39,7 +36,6 @@ class Game {
 
     /**
      * Initialise la scène
-     * @private
      */
     _initScene() {
         this.scene = new Scene(this.engine);
@@ -50,7 +46,6 @@ class Game {
 
     /**
      * Initialise la caméra
-     * @private
      */
     _initCamera() {
         const cameraOffset = new Vector3(0, 12, -12);
@@ -61,7 +56,6 @@ class Game {
 
     /**
      * Initialise le GameManager (cerveau du jeu)
-     * @private
      */
     async _initGameManager() {
         // Afficher l'écran de chargement
@@ -83,7 +77,6 @@ class Game {
 
     /**
      * Démarre la boucle de rendu
-     * @private
      */
     _startRenderLoop() {
         // Boucle de rendu Babylon.js
@@ -100,5 +93,4 @@ class Game {
     }
 }
 
-// lancer
 new Game();

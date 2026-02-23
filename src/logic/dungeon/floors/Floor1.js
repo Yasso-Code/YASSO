@@ -1,7 +1,6 @@
 import { Vector3 } from "@babylonjs/core";
 
 export class Floor1 {
-
     static generate(room, roomIndex, aiData) {
         switch (roomIndex) {
             case 0: return this._room1_CentralNode(room);
@@ -10,9 +9,7 @@ export class Floor1 {
         }
     }
 
-    // ─────────────────────────────────────────────
-    // SALLE 1 — CERCLE + PASSERELLES (Base de calibration)
-    // ─────────────────────────────────────────────
+    // SALLE 1 — CERCLE PLEIN + PASSERELLES
     static _room1_CentralNode(room) {
         const spacing = 4;
         const radius = 3;
@@ -25,23 +22,22 @@ export class Floor1 {
             }
         }
 
-        for (let i = radius + 1; i <= 6; i++) {
+        // Passerelles cardinales courtes
+        for (let i = radius + 1; i <= 5; i++) {
             room.addPlatform(new Vector3(i * spacing, 0, 0));
             room.addPlatform(new Vector3(-i * spacing, 0, 0));
             room.addPlatform(new Vector3(0, 0, i * spacing));
             room.addPlatform(new Vector3(0, 0, -i * spacing));
         }
 
-        room.setSpawnPosition(new Vector3(0, 1, -16));
-        room.addSpawnPoint(new Vector3(0, 1, 16));
+        room.setSpawnPosition(new Vector3(0, 1, -12));
+        room.addSpawnPoint(new Vector3(0, 1, 12));
     }
 
-    // ─────────────────────────────────────────────
     // SALLE 2 — DISQUE COMPACT (Taille réduite)
-    // ─────────────────────────────────────────────
     static _room2_DoubleRing(room) {
         const spacing = 4;
-        const outerRadius = 5; // Réduit pour plus de densité
+        const outerRadius = 5; // Réduit pour supprimer les zones vides inutiles
 
         for (let x = -outerRadius; x <= outerRadius; x++) {
             for (let z = -outerRadius; z <= outerRadius; z++) {
@@ -51,8 +47,8 @@ export class Floor1 {
             }
         }
 
-        room.setSpawnPosition(new Vector3(0, 1, -18));
-        room.addSpawnPoint(new Vector3(0, 1, 18));
+        room.setSpawnPosition(new Vector3(0, 1, -16));
+        room.addSpawnPoint(new Vector3(0, 1, 16));
     }
 
     // ─────────────────────────────────────────────
@@ -105,4 +101,5 @@ export class Floor1 {
         room.setSpawnPosition(new Vector3(0, 1, -20));  // ⬅️ réduit
         room.addSpawnPoint(new Vector3(0, 1, 20));      // ⬅️ réduit
     }
+
 }

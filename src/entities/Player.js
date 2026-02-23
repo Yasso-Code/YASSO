@@ -2,37 +2,42 @@ import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray, Animation, CubicEa
 
 /**
  * @class Player
- * @description Represente le joueur (Yasso).
+ * @description Représente le joueur (Yasso).
  */
 export class Player {
     constructor(scene) {
         this.scene = scene;
         this._initMesh();
 
+        // Déplacements
         this.baseSpeed = 0.18;
         this.speed = this.baseSpeed;
-        this.isDashReady = true;
         this.lastMoveDirection = new Vector3(0, 0, 1);
         this.isDashing = false;
-        this.currentDashAnim = null; // Reference to the dash animation
-        this.audioManager = null;
+        this.isDashReady = true;
+        this.currentDashAnim = null;
 
-        // Systeme de vie
+        // Système de vie
         this.maxHealth = 30;
         this.currentHealth = 30;
         this.isInvincible = false;
         this.invincibilityDuration = 1500;
 
-        // Bonus temporaires
+        // Bonus
         this.activePower = null;
-        this.storedPower = null; // Pouvoir ramassé mais pas encore activé
+        this.storedPower = null;
         this.powerTimer = 0;
+
+        this.audioManager = null;
     }
 
     setAudioManager(audioManager) {
         this.audioManager = audioManager;
     }
 
+    // ─────────────────────────────────────────────
+    // INITIALISATION DU MESH
+    // ─────────────────────────────────────────────
     _initMesh() {
         this.mesh = MeshBuilder.CreateBox("yasso_body", { width: 0.8, height: 1.6, depth: 0.4 }, this.scene);
         this.mesh.position.y = 0.8;
@@ -57,17 +62,31 @@ export class Player {
         this.trailMesh.material = trailMat;
     }
 
+    // ─────────────────────────────────────────────
+    // RESET GLOBAL (appelé au début du jeu)
+    // ─────────────────────────────────────────────
     reset() {
-        this.cancelDash(); // Stop any ongoing dash
-        this.mesh.position = new Vector3(0, 0.8, 0);
-        this.mesh.rotation = Vector3.Zero();
-        this.lastMoveDirection = new Vector3(0, 0, 1);
-        this.isDashing = false;
+        this.resetMovement();
         this.currentHealth = this.maxHealth;
         this.isInvincible = false;
         this.mesh.material.alpha = 0.8;
         this.deactivatePower();
         this.storedPower = null;
+    }
+
+    // ─────────────────────────────────────────────
+    // RESET MOUVEMENT (NE TOUCHE PLUS À LA POSITION)
+    // ─────────────────────────────────────────────
+    resetMovement() {
+        this.cancelDash();
+
+        this.mesh.rotation = Vector3.Zero();
+        this.lastMoveDirection = new Vector3(0, 0, 1);
+
+        this.isDashing = false;
+        this.isDashReady = true;
+
+        console.log("🔄 Player movement reset (sans repositionnement)");
     }
 
     cancelDash() {
@@ -79,11 +98,13 @@ export class Player {
         this._hideDashTrail();
     }
 
+    // ─────────────────────────────────────────────
+    // VALIDATION DU SOL
+    // ─────────────────────────────────────────────
     _isValidMove(targetPosition) {
         const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
-        const length = 5;
-        const ray = new Ray(origin, direction, length);
+        const ray = new Ray(origin, direction, 5);
 
         const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
             return mesh.name === "p" || mesh.name === "exit" || mesh.name.includes("portal");
@@ -92,8 +113,11 @@ export class Player {
         return hitInfo.hit;
     }
 
+    // ─────────────────────────────────────────────
+    // UPDATE PRINCIPAL
+    // ─────────────────────────────────────────────
     update(inputManager, aiCollector) {
-        // Gestion du timer de pouvoir
+        // Timer des pouvoirs
         if (this.activePower) {
             this.powerTimer--;
             if (this.powerTimer <= 0) {
@@ -101,7 +125,7 @@ export class Player {
             }
         }
 
-        // Activation du pouvoir stocké avec E
+        // Activation du pouvoir stocké
         if (inputManager.isInteractTriggered() && this.storedPower) {
             this.activatePower(this.storedPower);
             this.storedPower = null;
@@ -136,8 +160,11 @@ export class Player {
         }
     }
 
+    // ─────────────────────────────────────────────
+    // GESTION DES DÉGÂTS
+    // ─────────────────────────────────────────────
     takeDamage() {
-        if (this.isInvincible || (this.activePower === "Sentinelle")) return false; // Invincibilité Sentinelle
+        if (this.isInvincible || (this.activePower === "Sentinelle")) return false;
 
         this.currentHealth--;
         console.log(`YASSO HIT! Health: ${this.currentHealth}/${this.maxHealth}`);
@@ -168,6 +195,9 @@ export class Player {
         }, this.invincibilityDuration / 10);
     }
 
+    // ─────────────────────────────────────────────
+    // DASH
+    // ─────────────────────────────────────────────
     executeDash(direction, aiCollector) {
         if (!this.isDashReady || this.isDashing) return;
 
@@ -175,12 +205,8 @@ export class Player {
         this.isDashing = true;
         aiCollector.recordDash();
 
-        // Son de dash
-        if (this.audioManager) {
-            this.audioManager.playSound("dash");
-        }
+        if (this.audioManager) this.audioManager.playSound("dash");
 
-        // Bonus Pulse : Explosion au départ du dash
         if (this.activePower === "Pulse") {
             this._triggerPulseExplosion();
         }
@@ -191,7 +217,6 @@ export class Player {
         this._showDashTrail();
 
         let targetPos = this.mesh.position.add(dashDir.scale(dashDistance));
-
         if (!this._isValidMove(targetPos)) {
             targetPos = this.mesh.position.clone();
         }
@@ -221,7 +246,6 @@ export class Player {
 
     _showDashTrail() {
         if (!this.trailMesh) return;
-
         const trailMat = this.trailMesh.material;
         trailMat.alpha = 0.6;
 
@@ -242,48 +266,43 @@ export class Player {
         this.trailMesh.material.alpha = 0;
     }
 
-    // --- Gestion des Pouvoirs ---
-
+    // ─────────────────────────────────────────────
+    // POUVOIRS
+    // ─────────────────────────────────────────────
     collectPower(type) {
         this.storedPower = type;
         console.log(`POWER STORED: ${type}`);
-        // Petit effet visuel pour dire qu'on a ramassé un truc ?
     }
 
     activatePower(type) {
-        this.deactivatePower(); // Reset précédent
+        this.deactivatePower();
         this.activePower = type;
-        this.powerTimer = 600; // 10 secondes (à 60fps)
+        this.powerTimer = 600;
 
         console.log(`POWER UP ACTIVATED: ${type}`);
 
         if (type === "Traqueur") {
-            this.speed = this.baseSpeed * 1.5; // Vitesse augmentée
-            this.mesh.material.emissiveColor = new Color3(1, 0, 0); // Rouge
+            this.speed = this.baseSpeed * 1.5;
+            this.mesh.material.emissiveColor = new Color3(1, 0, 0);
         } else if (type === "Sentinelle") {
-            // Invincibilité gérée dans takeDamage
-            this.mesh.material.emissiveColor = new Color3(1, 0.5, 0); // Orange
+            this.mesh.material.emissiveColor = new Color3(1, 0.5, 0);
         } else if (type === "Pulse") {
-            // Explosion gérée dans executeDash
-            this.mesh.material.emissiveColor = new Color3(1, 0, 1); // Violet
+            this.mesh.material.emissiveColor = new Color3(1, 0, 1);
         }
-        
-        if (this.audioManager) {
-            this.audioManager.playSound("bonus");
-        }
+
+        if (this.audioManager) this.audioManager.playSound("bonus");
     }
 
     deactivatePower() {
         if (!this.activePower) return;
-        
+
         console.log("POWER UP ENDED");
         this.activePower = null;
         this.speed = this.baseSpeed;
-        this.mesh.material.emissiveColor = new Color3(0, 1, 1); // Retour au Cyan
+        this.mesh.material.emissiveColor = new Color3(0, 1, 1);
     }
 
     _triggerPulseExplosion() {
-        // Effet visuel
         const particleSystem = new ParticleSystem("pulseExplosion", 50, this.scene);
         particleSystem.particleTexture = new Texture("https://assets.babylonjs.com/textures/flare.png", this.scene);
         particleSystem.emitter = this.mesh.position.clone();
@@ -296,17 +315,13 @@ export class Player {
         particleSystem.emitRate = 1000;
         particleSystem.targetStopDuration = 0.1;
         particleSystem.start();
-        
-        if (this.audioManager) {
-            this.audioManager.playSound("explosion");
-        }
 
-        // Logique de dégâts de zone (simple raycast autour ou sphere check)
-        // Pour simplifier, on suppose que l'EntityManager gère les collisions, 
-        // mais ici on pourrait ajouter une logique pour tuer les ennemis proches.
-        // Pour l'instant, c'est surtout visuel et défensif.
+        if (this.audioManager) this.audioManager.playSound("explosion");
     }
 
+    // ─────────────────────────────────────────────
+    // HUD DATA
+    // ─────────────────────────────────────────────
     getHealthData() {
         return {
             current: this.currentHealth,

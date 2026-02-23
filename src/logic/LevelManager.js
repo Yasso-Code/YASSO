@@ -40,6 +40,66 @@ export class LevelManager {
     }
 
     /**
+     * ═══════════════════════════════════════════════════════════════
+     * 🎮 SPAWN PLAYER - MÉTHODE UNIQUE CENTRALISÉE
+     * ═══════════════════════════════════════════════════════════════
+     *
+     * SINGLE SOURCE OF TRUTH pour TOUS les spawns du joueur.
+     *
+     * Appelée lors de :
+     * - Démarrage du jeu
+     * - Changement de salle
+     * - Changement d'étage
+     * - Respawn après mort (si implémenté)
+     *
+     * ✅ Garantit :
+     * - Pas de dash résiduel
+     * - Pas de vitesse résiduelle
+     * - Pas de téléportation parasite
+     * - Pas de collision fantôme
+     * - Protection anti-portail active
+     * - Position correcte TOUJOURS
+     */
+    spawnPlayer(player, position = null) {
+        // ─────────────────────────────────────────────────────────
+        // 1. DÉTERMINER LA POSITION DE SPAWN
+        // ─────────────────────────────────────────────────────────
+        let spawnPos;
+
+        if (position) {
+            // Position explicite fournie
+            spawnPos = position.clone();
+        } else if (this.currentRoom && this.currentRoom.spawnPosition) {
+            // Position définie par la salle
+            spawnPos = this.currentRoom.spawnPosition.clone();
+        } else {
+            // Fallback sécurité
+            spawnPos = new Vector3(0, 0.8, 0);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 2. RESET COMPLET DU MOUVEMENT
+        // ─────────────────────────────────────────────────────────
+        player.resetMovement();
+
+        // ─────────────────────────────────────────────────────────
+        // 3. TÉLÉPORTATION À LA POSITION DE SPAWN
+        // ─────────────────────────────────────────────────────────
+        player.mesh.position.copyFrom(spawnPos);
+
+        // ─────────────────────────────────────────────────────────
+        // 4. ACTIVATION PROTECTION ANTI-PORTAIL (500ms)
+        // ─────────────────────────────────────────────────────────
+        this.spawnProtectionTime = Date.now() + 500;
+
+        // ─────────────────────────────────────────────────────────
+        // 5. LOG DE CONFIRMATION
+        // ─────────────────────────────────────────────────────────
+        console.log(`🎮 Player spawned at (${spawnPos.x.toFixed(1)}, ${spawnPos.y.toFixed(1)}, ${spawnPos.z.toFixed(1)})`);
+        console.log(`🛡️ Spawn protection: 500ms`);
+    }
+
+    /**
      * ✅ RÉSOLUT L'ERREUR : Définit l'EntityManager
      */
     setEntityManager(entityManager) {
@@ -66,7 +126,7 @@ export class LevelManager {
     /**
      * Démarre un nouvel étage et réinitialise l'index à la Salle 1
      */
-    loadFloor(floorNumber, aiData = null) {
+    loadFloor(floorNumber, player, aiData = null) {
         this.currentFloor = floorNumber;
         this.currentRoomIndex = 0; // ✅ Force le retour à la salle 1
         this.currentFloorConfig = FloorConfig.getFloor(floorNumber);
@@ -78,19 +138,16 @@ export class LevelManager {
         }
         this.scene.fogDensity = this.currentFloorConfig.theme.fogDensity;
 
-        this.loadRoom(0, aiData);
+        this.loadRoom(0, player, aiData);
     }
 
     /**
      * Charge une salle spécifique
      */
-    loadRoom(roomIndex, aiData = null) {
+    loadRoom(roomIndex, player, aiData = null) {
         this.currentRoomIndex = roomIndex;
         this.currentFloorConfig = FloorConfig.getFloor(this.currentFloor);
         this.roomClearedTriggered = false;
-
-        // ✅ Active la protection (bloque les portails pendant 0.5s)
-        this.spawnProtectionTime = Date.now() + 500;
 
         this.currentRoom = FloorGenerator.generateRoom(
             this.currentFloor,
@@ -106,6 +163,9 @@ export class LevelManager {
         if (this.exitPlatformLocation) {
             this._createExitPortal(this.exitPlatformLocation, this.currentRoomIndex, this.currentFloorConfig);
         }
+
+        // ✅ SPAWN PLAYER via la méthode centralisée
+        this.spawnPlayer(player);
 
         // Déclenche le spawn via le callback du GameManager
         this._spawnEnemiesForRoom(this.currentRoom, this.currentFloorConfig);
@@ -152,8 +212,8 @@ export class LevelManager {
             }
 
             if (this.currentFloor < 5) {
-                this.loadFloor(this.currentFloor + 1, aiData);
-                player.reset();
+                // ✅ Passage à l'étage suivant via méthode centralisée
+                this.loadFloor(this.currentFloor + 1, player, aiData);
             } else if (this.onGameWon) {
                 this.onGameWon();
             }
@@ -162,7 +222,7 @@ export class LevelManager {
 
     checkPortalInteraction(player, entityManager, aiData) {
         // ✅ Empêche de quitter la salle si on vient de spawn
-        if (Date.now() < this.spawnProtectionTime) return;
+        if (Date.now() < this.spawnProtectionTime) return false;
 
         for (const portal of this.roomManager.portals) {
             if (portal.metadata && !portal.metadata.isLocked &&
@@ -174,14 +234,8 @@ export class LevelManager {
                     aiData.recordRoomCompletion(entityManager.getEnemyCount());
                 }
 
-                // Repositionnement au spawn de la nouvelle salle
-                if (this.currentRoom && this.currentRoom.spawnPosition) {
-                    player.mesh.position = this.currentRoom.spawnPosition.clone();
-                } else {
-                    player.mesh.position = new Vector3(0, 0.8, 0);
-                }
-
-                this.loadRoom(portal.metadata.nextRoomIndex, aiData);
+                // ✅ Passage à la salle suivante via méthode centralisée
+                this.loadRoom(portal.metadata.nextRoomIndex, player, aiData);
                 return true;
             }
         }

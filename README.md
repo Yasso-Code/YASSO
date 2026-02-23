@@ -1,4 +1,3 @@
-
 # YASSO - Games on Web 2026
 
 Projet pour le concours Games on Web (IA Edition).
@@ -17,6 +16,3 @@ pour tester
 git add .
 git commit -m "TEST: ajout fichier B"
 git push -u origin test_B
-
-=======
-# YASSO
