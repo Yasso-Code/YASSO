@@ -203,8 +203,12 @@ export class DebugManager {
             this.gameManager.startGame();
         }
 
-        this.gameManager.levelManager.loadFloor(floorNumber, this.gameManager.ai);
-        this.gameManager.player.reset();
+        // ✅ CORRECTION: Nouvelle signature avec player
+        this.gameManager.levelManager.loadFloor(
+            floorNumber,
+            this.gameManager.player,
+            this.gameManager.ai
+        );
 
         this._updateDebugPanel();
     }
@@ -221,8 +225,12 @@ export class DebugManager {
             return;
         }
 
-        this.gameManager.levelManager.loadRoom(roomIndex, this.gameManager.ai);
-        this.gameManager.player.mesh.position.set(0, 0.8, 0);
+        // ✅ CORRECTION: Nouvelle signature avec player
+        this.gameManager.levelManager.loadRoom(
+            roomIndex,
+            this.gameManager.player,
+            this.gameManager.ai
+        );
 
         this._updateDebugPanel();
     }
@@ -234,11 +242,14 @@ export class DebugManager {
     _restartCurrentRoom() {
         console.log("🔧 Restart Current Room");
 
-        const currentFloor = this.gameManager.levelManager.currentFloor;
         const currentRoom = this.gameManager.levelManager.currentRoomIndex;
 
-        this.gameManager.levelManager.loadRoom(currentRoom, this.gameManager.ai);
-        this.gameManager.player.mesh.position.set(0, 0.8, 0);
+        // ✅ CORRECTION: Nouvelle signature avec player
+        this.gameManager.levelManager.loadRoom(
+            currentRoom,
+            this.gameManager.player,
+            this.gameManager.ai
+        );
 
         this._updateDebugPanel();
     }
@@ -292,23 +303,23 @@ export class DebugManager {
             };
         }
 
-        // Remplacer loadRoom
-        levelManager.loadRoom = (roomIndex, aiData) => {
+        // ✅ CORRECTION: Remplacer loadRoom avec nouvelle signature
+        levelManager.loadRoom = (roomIndex, player, aiData) => {
             if (this.shouldStayInLockedRoom()) {
                 console.log("🔒 Room locked - Blocking room transition");
                 this.returnToLockedRoom();
             } else {
-                this._originalMethods.loadRoom(roomIndex, aiData);
+                this._originalMethods.loadRoom(roomIndex, player, aiData);
             }
         };
 
-        // Remplacer loadFloor
-        levelManager.loadFloor = (floorNumber, aiData) => {
+        // ✅ CORRECTION: Remplacer loadFloor avec nouvelle signature
+        levelManager.loadFloor = (floorNumber, player, aiData) => {
             if (this.shouldStayInLockedRoom()) {
                 console.log("🔒 Room locked - Blocking floor transition");
                 this.returnToLockedRoom();
             } else {
-                this._originalMethods.loadFloor(floorNumber, aiData);
+                this._originalMethods.loadFloor(floorNumber, player, aiData);
             }
         };
 
@@ -379,9 +390,18 @@ export class DebugManager {
 
         console.log(`🔒 Returning to locked room: Floor ${floor}, Room ${room + 1}`);
 
-        this.gameManager.levelManager.loadFloor(floor, this.gameManager.ai);
-        this.gameManager.levelManager.loadRoom(room, this.gameManager.ai);
-        this.gameManager.player.reset();
+        // ✅ CORRECTION: Utiliser la nouvelle signature
+        this.gameManager.levelManager.loadFloor(
+            floor,
+            this.gameManager.player,
+            this.gameManager.ai
+        );
+
+        this.gameManager.levelManager.loadRoom(
+            room,
+            this.gameManager.player,
+            this.gameManager.ai
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════

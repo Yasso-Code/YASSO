@@ -3,20 +3,12 @@ import { Color3 } from "@babylonjs/core";
 /**
  * @class FloorConfig
  * @description Configuration des 5 étages du donjon
- *
- * Philosophie de conception :
- * - Étage 1 (Interface) : Calibration - Observer les patterns de base
- * - Étage 2 (Pare-feu) : Pression - Tester les réactions sous stress
- * - Étage 3 (Buffer) : Espace - Analyser l'utilisation spatiale
- * - Étage 4 (Noyau) : Précision - Tester la maîtrise mécanique
- * - Étage 5 (Nexus) : Adaptation - Synthèse et miroir du joueur
  */
 export class FloorConfig {
     static FLOORS = [
         {
             id: 1,
             name: "Interface",
-            // Changement : Vert émeraude au lieu de bleu pour correspondre à l'image
             color: new Color3(0/255, 150/255, 95/255),
             rooms: 3,
             roomType: "simple",
@@ -24,9 +16,9 @@ export class FloorConfig {
             philosophy: "CALIBRATION",
             description: "Nœud de calcul primaire - Observer le joueur",
             theme: {
-                ambientIntensity: 0.2, // Baissé pour que seuls les contours brillent
+                ambientIntensity: 0.2,
                 fogDensity: 0.03,
-                emissiveMultiplier: 2.5 // Boost des lignes lumineuses
+                emissiveMultiplier: 2.5
             }
         },
         {
@@ -47,16 +39,17 @@ export class FloorConfig {
         {
             id: 3,
             name: "Buffer",
-            color: new Color3(0.3, 0.8, 0.3), // Vert - Espace, liberté
+            // ✅ CORRECTION: Violet/Rose cyberpunk au lieu de vert
+            color: new Color3(0.69, 0.25, 0.93), // #B040ED - Violet cyberpunk
             rooms: 3,
             roomType: "open",
             enemyType: "Pulse",
             philosophy: "ADAPTATION",
-            description: "Désorienter et créer tension",
+            description: "Structures fractales - Espace cyberpunk",
             theme: {
-                ambientIntensity: 0.5,
-                fogDensity: 0.025,
-                emissiveMultiplier: 0.9
+                ambientIntensity: 0.4,
+                fogDensity: 0.035,
+                emissiveMultiplier: 1.8 // Boost pour l'effet néon
             }
         },
         {

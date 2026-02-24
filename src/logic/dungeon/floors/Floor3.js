@@ -1,76 +1,145 @@
 import { Vector3 } from "@babylonjs/core";
 
+/**
+ * 🟣 ÉTAGE 3: BUFFER - STABILITÉ MAXIMALE
+ * Design : Salles plus petites mais très lisibles, chacune avec une identité forte.
+ */
 export class Floor3 {
     static generate(room, roomIndex, aiData) {
+        switch (roomIndex) {
+            case 0: return this._room1_RingCircle(room);
+            case 1: return this._room2_HollowSquare(room);
+            case 2: return this._room3_RectangleWithAlcoves(room);
+        }
+    }
+
+    /**
+     * SALLE 1 — LE CERCLE À ANNEAU
+     * Petit cercle central + anneau extérieur → lisible, nerveux.
+     */
+    static _room1_RingCircle(room) {
         const spacing = 4;
+        const innerRadius = 4;
+        const outerRadius = 6;
+        const platforms = [];
 
-        if (roomIndex === 0) { // VAGUE HORIZONTALE
-            for (let x = -5; x <= 5; x++) {
-                const waveAmplitude = 2;
-                const waveFrequency = 0.6;
-                const centerZ = Math.sin(x * waveFrequency) * waveAmplitude;
-
-                for (let z = -4; z <= 4; z++) {
-                    if (Math.abs(z - centerZ) <= 2.5) {
-                        room.addPlatform(new Vector3(x * spacing, 0, z * spacing));
-                    }
+        // Cercle central
+        for (let x = -innerRadius; x <= innerRadius; x++) {
+            for (let z = -innerRadius; z <= innerRadius; z++) {
+                if (x * x + z * z <= innerRadius * innerRadius) {
+                    const pos = new Vector3(x * spacing, 0, z * spacing);
+                    room.addPlatform(pos);
+                    platforms.push(pos);
                 }
             }
-            room.setSpawnPosition(new Vector3(-20, 0.8, 0)); // Spawn à une extrémité
-            room.addSpawnPoint(new Vector3(16, 1, 0));
-            room.addSpawnPoint(new Vector3(0, 1, 8));
         }
-        else if (roomIndex === 1) { // SPIRALE
-            const numPoints = 120;
-            const maxRadius = 5;
-            const spiralWidth = 1.5;
 
-            for (let i = 0; i < numPoints; i++) {
-                const angle = (i / numPoints) * Math.PI * 5;
-                const radius = (i / numPoints) * maxRadius;
-                const centerX = Math.cos(angle) * radius;
-                const centerZ = Math.sin(angle) * radius;
-
-                for (let dx = -spiralWidth; dx <= spiralWidth; dx++) {
-                    for (let dz = -spiralWidth; dz <= spiralWidth; dz++) {
-                        if (dx * dx + dz * dz <= spiralWidth * spiralWidth) {
-                            const x = Math.round(centerX + dx);
-                            const z = Math.round(centerZ + dz);
-                            if (Math.abs(x) <= 5 && Math.abs(z) <= 5) {
-                                room.addPlatform(new Vector3(x * spacing, 0, z * spacing));
-                            }
-                        }
-                    }
+        // Anneau extérieur (épaisseur 1)
+        for (let x = -outerRadius; x <= outerRadius; x++) {
+            for (let z = -outerRadius; z <= outerRadius; z++) {
+                const d = x * x + z * z;
+                if (d <= outerRadius * outerRadius && d >= (innerRadius + 1) * (innerRadius + 1)) {
+                    const pos = new Vector3(x * spacing, 0, z * spacing);
+                    room.addPlatform(pos);
+                    platforms.push(pos);
                 }
             }
-            room.setSpawnPosition(new Vector3(0, 0.8, 0)); // Spawn au centre de la spirale
-            room.addSpawnPoint(new Vector3(16, 1, 16));
         }
-        else { // FLEUR À PÉTALES
-            const centerRadius = 1.5;
-            for (let x = -centerRadius; x <= centerRadius; x++) {
-                for (let z = -centerRadius; z <= centerRadius; z++) {
-                    if (x * x + z * z <= centerRadius * centerRadius)
-                        room.addPlatform(new Vector3(x * spacing, 0, z * spacing));
+
+        // Couloir Sud
+        for (let i = 1; i <= 4; i++) {
+            room.addPlatform(new Vector3(0, 0, -(outerRadius + i) * spacing));
+        }
+
+        const playerSpawnPos = new Vector3(0, 1, -(outerRadius + 4) * spacing);
+        room.setSpawnPosition(playerSpawnPos);
+        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 6);
+    }
+
+    /**
+     * SALLE 2 — LE CARRÉ CREUX
+     * Grand carré vide au centre + passerelles diagonales.
+     */
+    static _room2_HollowSquare(room) {
+        const spacing = 4;
+        const size = 6;      // carré extérieur
+        const hole = 3;      // carré intérieur vide
+        const platforms = [];
+
+        // Carré extérieur
+        for (let x = -size; x <= size; x++) {
+            for (let z = -size; z <= size; z++) {
+                if (Math.abs(x) > hole || Math.abs(z) > hole) {
+                    const pos = new Vector3(x * spacing, 0, z * spacing);
+                    room.addPlatform(pos);
+                    platforms.push(pos);
                 }
             }
+        }
 
-            const numPetals = 5;
-            for (let i = 0; i < numPetals; i++) {
-                const angle = (i / numPetals) * Math.PI * 2;
-                const petalCenterX = Math.cos(angle) * 3.5;
-                const petalCenterZ = Math.sin(angle) * 3.5;
+        // Passerelles diagonales
+        for (let i = -hole; i <= hole; i++) {
+            room.addPlatform(new Vector3(i * spacing, 0, i * spacing));
+            room.addPlatform(new Vector3(i * spacing, 0, -i * spacing));
+        }
 
-                for (let x = -2; x <= 2; x++) {
-                    for (let z = -2; z <= 2; z++) {
-                        if ((x/2)**2 + (z/2.6)**2 <= 1) {
-                            room.addPlatform(new Vector3(Math.round(petalCenterX + x) * spacing, 0, Math.round(petalCenterZ + z) * spacing));
-                        }
-                    }
-                }
-                room.addSpawnPoint(new Vector3(petalCenterX * spacing, 1, petalCenterZ * spacing));
+        // Couloir Ouest
+        for (let i = 1; i <= 4; i++) {
+            room.addPlatform(new Vector3(-(size + i) * spacing, 0, 0));
+        }
+
+        const playerSpawnPos = new Vector3(-(size + 4) * spacing, 1, 0);
+        room.setSpawnPosition(playerSpawnPos);
+        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 7);
+    }
+
+    /**
+     * SALLE 3 — RECTANGLE AVEC ALCÔVES
+     * Rectangle compact + 4 alcôves latérales → gameplay varié.
+     */
+    static _room3_RectangleWithAlcoves(room) {
+        const spacing = 4;
+        const width = 8;
+        const depth = 4;
+        const platforms = [];
+
+        // Rectangle principal
+        for (let x = -width; x <= width; x++) {
+            for (let z = -depth; z <= depth; z++) {
+                const pos = new Vector3(x * spacing, 0, z * spacing);
+                room.addPlatform(pos);
+                platforms.push(pos);
             }
-            room.setSpawnPosition(new Vector3(0, 0.8, 0));
+        }
+
+        // Alcôves latérales
+        const alcoveDepth = 2;
+        for (let z = -alcoveDepth; z <= alcoveDepth; z++) {
+            room.addPlatform(new Vector3((width + 1) * spacing, 0, z * spacing));
+            room.addPlatform(new Vector3(-(width + 1) * spacing, 0, z * spacing));
+        }
+
+        // Couloir Nord
+        for (let i = 1; i <= 4; i++) {
+            room.addPlatform(new Vector3(0, 0, (depth + i) * spacing));
+        }
+
+        const playerSpawnPos = new Vector3(0, 1, (depth + 4) * spacing);
+        room.setSpawnPosition(playerSpawnPos);
+        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 9);
+    }
+
+    /**
+     * Spawn sécurisé
+     */
+    static _spawnRandomEnemies(room, platforms, playerPos, count) {
+        const minDistance = 22;
+        let validPoints = platforms.filter(p => Vector3.Distance(p, playerPos) > minDistance);
+
+        validPoints.sort(() => Math.random() - 0.5);
+
+        for (let i = 0; i < Math.min(count, validPoints.length); i++) {
+            room.addSpawnPoint(new Vector3(validPoints[i].x, 1, validPoints[i].z));
         }
     }
 }

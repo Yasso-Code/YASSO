@@ -1,14 +1,12 @@
 import { Vector3 } from "@babylonjs/core";
 
 /**
- * @class Room
  * @description Représente une salle individuelle du donjon
  *
  * Une salle contient :
  * - Des plateformes (sol)
  * - Des points de spawn d'ennemis
  * - Des décorations (visuels)
- * - Des métadonnées (type, difficulté, etc.)
  */
 export class Room {
     constructor(config) {
@@ -154,10 +152,6 @@ export class Room {
 
     /**
      * Crée une grille de plateformes
-     * @param {number} width - Largeur en nombre de plateformes
-     * @param {number} depth - Profondeur en nombre de plateformes
-     * @param {number} spacing - Espacement entre plateformes (défaut: 4)
-     * @param {Vector3} offset - Décalage de départ (défaut: 0,0,0)
      */
     createGrid(width, depth, spacing = 4, offset = Vector3.Zero()) {
         for (let x = 0; x < width; x++) {
@@ -174,9 +168,6 @@ export class Room {
 
     /**
      * Crée un chemin linéaire de plateformes
-     * @param {number} length - Longueur du chemin
-     * @param {string} direction - Direction ('x', 'z', 'both')
-     * @param {number} spacing - Espacement (défaut: 4)
      */
     createPath(length, direction = 'z', spacing = 4) {
         let currentPos = new Vector3(0, 0, 0);
@@ -202,8 +193,6 @@ export class Room {
 
     /**
      * Crée une arène circulaire
-     * @param {number} radius - Rayon en nombre de plateformes
-     * @param {number} spacing - Espacement (défaut: 4)
      */
     createArena(radius, spacing = 4) {
         const center = new Vector3(0, 0, 0);
