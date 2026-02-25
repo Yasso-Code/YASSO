@@ -162,15 +162,19 @@ export class LevelManager {
         }
 
         const isLastRoom = (roomIndex === config.rooms - 1);
+        // On récupère la position propre
+        const pos = exitPlatform.position ? exitPlatform.position : exitPlatform;
 
         if (isLastRoom) {
             if (this.currentFloor < 5) {
-                this.roomManager.createFloorPortal(exitPlatform);
+                // Utilise maintenant le visuel d'arche violet pour l'étage
+                this.roomManager.createFloorPortal(pos);
             } else {
-                this.bossExitPosition = exitPlatform;
+                this.bossExitPosition = pos;
             }
         } else {
-            this.roomManager.createRoomPortal(exitPlatform, roomIndex + 1);
+            // Utilise le visuel d'arche cyan pour la salle suivante
+            this.roomManager.createRoomPortal(pos, roomIndex + 1);
         }
     }
 
@@ -214,10 +218,10 @@ export class LevelManager {
     }
 
     checkPortalInteraction(player, entityManager, aiData) {
-        // ✅ Empêche de quitter la salle si on vient de spawn
         if (Date.now() < this.spawnProtectionTime) return false;
 
         for (const portal of this.roomManager.portals) {
+            // Si portal.metadata existe (grâce à la modif RoomPortals), l'interaction fonctionnera
             if (portal.metadata && !portal.metadata.isLocked &&
                 player.mesh && player.mesh.intersectsMesh(portal, false)) {
 
@@ -227,7 +231,7 @@ export class LevelManager {
                     aiData.recordRoomCompletion(entityManager.getEnemyCount());
                 }
 
-                // ✅ Passage à la salle suivante via méthode centralisée
+                // Téléportation vers la salle suivante
                 this.loadRoom(portal.metadata.nextRoomIndex, player, aiData);
                 return true;
             }

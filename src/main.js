@@ -51,7 +51,11 @@ class Game {
         const cameraOffset = new Vector3(0, 12, -12);
         this.camera = new FreeCamera("mainCamera", cameraOffset, this.scene);
 
-        console.log("✅ Caméra créée");
+        // Ajoute cette ligne pour empêcher la souris/clavier de faire tourner la caméra
+        // On veut que SEUL le code (GameManager) puisse la bouger.
+        this.camera.inputs.clear();
+
+        console.log("✅ Caméra stabilisée (Inputs désactivés)");
     }
 
     /**

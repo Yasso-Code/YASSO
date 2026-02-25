@@ -303,6 +303,10 @@ export class GameManager {
      * Update principal du jeu
      * @private
      */
+    /**
+     * Update principal du jeu
+     * @private
+     */
     _update() {
         // ✅ AJOUT: Update debug manager
         if (this.debugManager) {
@@ -327,12 +331,11 @@ export class GameManager {
         this.levelManager.checkExitInteraction(this.player, this.entityManager, this.ai);
 
         // ─────────────────────────────────────────────────────────
-        // UPDATE CAMÉRA
+        // UPDATE CAMÉRA (Style Hades)
         // ─────────────────────────────────────────────────────────
         if (this.player.mesh) {
-            this._handleCameraZoom();
-            this.camera.position = this.player.mesh.position.add(this.cameraOffset);
-            this.camera.setTarget(this.player.mesh.position);
+            this._handleCameraZoom(); // Gère les changements d'offset
+            this._updateCamera();     // Applique le mouvement fluide (Lerp)
         }
 
         // ─────────────────────────────────────────────────────────
@@ -342,7 +345,6 @@ export class GameManager {
 
         // ✅ MODIFICATION: Vérifier God Mode avant dégâts
         if (collisionDetected && (Date.now() - this.gameStartTime > 1000)) {
-            // Vérifier si on doit prendre des dégâts (God Mode)
             if (!this.debugManager || this.debugManager.shouldTakeDamage()) {
                 this.player.takeDamage();
                 if (this.ai) {
@@ -354,18 +356,14 @@ export class GameManager {
         // ─────────────────────────────────────────────────────────
         // CHECK CONDITIONS DE FIN
         // ─────────────────────────────────────────────────────────
-
-        // Game Over si vie à 0
         if (this.player.currentHealth <= 0) {
             this._transitionToGameOver();
         }
 
-        // Salle nettoyée si tous les ennemis morts
         if (this.entityManager.getEnemyCount() === 0) {
             this.levelManager.onRoomEnemiesCleared();
         }
 
-        // Adaptation IA critique
         if (this.ai.shouldAdapt()) {
             this.levelManager.applyGlitchEffect();
             console.warn("⚠️ CRITICAL ERROR: AI ADAPTATION TRIGGERED");
@@ -424,6 +422,19 @@ export class GameManager {
             // 3. ✅ ACTUALISATION : Envoyer le DataCollector au moniteur de debug
             // On passe directement l'instance 'this.ai' pour extraire les métriques brutes
             this.hudManager.updateDebug(this.ai);
+        }
+    }
+
+    _updateCamera() {
+        if (this.player && this.player.mesh) {
+            // Position cible souhaitée
+            const targetPosition = this.player.mesh.position.add(this.cameraOffset);
+
+            // Interpolation linéaire (Lerp) pour la fluidité : 0.1 est la vitesse de suivi
+            this.camera.position = Vector3.Lerp(this.camera.position, targetPosition, 0.05);
+
+            // On regarde toujours le joueur
+            this.camera.setTarget(this.player.mesh.position);
         }
     }
 }
