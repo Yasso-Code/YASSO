@@ -17,15 +17,16 @@ export class FloorGenerator {
             difficulty: this._calculateDifficulty(floorNumber, roomIndex)
         });
 
-        // Routage vers l'étage spécifique
-        switch (floorNumber) {
-            case 1: Floor1.generate(room, roomIndex, aiData); break;
-            case 2: Floor2.generate(room, roomIndex, aiData); break;
-            case 3: Floor3.generate(room, roomIndex, aiData); break;
-            case 4: Floor4.generate(room, roomIndex, aiData); break;
-            case 5: Floor5.generate(room, roomIndex, aiData); break;
-            default: Floor1.generate(room, roomIndex, aiData);
-        }
+        const floorModules = {
+            1: Floor1,
+            2: Floor2,
+            3: Floor3,
+            4: Floor4,
+            5: Floor5
+        };
+
+        const module = floorModules[floorNumber] || Floor1;
+        module.generate(room, roomIndex, aiData);
 
         room.start();
         return room;
@@ -36,26 +37,30 @@ export class FloorGenerator {
     }
 
     /**
-     * Base de données de progression des ennemis (Centralisée ici)
+     * Base de données de progression des ennemis
      */
     static getEnemyTypesForRoom(floorNumber, roomIndex) {
         const progression = {
-                1: [
-                    ["Traqueur"],
-                    ["Traqueur", "Sentinelle"],
-                    ["Traqueur", "Sentinelle"]
-                ],
-                2: [
-                    ["Traqueur", "Drone"],
-                    ["Sentinelle", "Pulse"],
-                    ["Traqueur", "Sentinelle", "Pulse"]
-                ],
-                3: [
-                    ["Sentinelle", "Pulse"],
-                    ["Traqueur", "Pulse", "Drone"],
-                    ["Traqueur", "Sentinelle", "Drone"] // Salle 3-3 (mini-boss)
-                ],
-            4: [["Sentinelle", "Pulse", "Drone"], ["Traqueur", "Sentinelle", "Pulse", "Tank"], ["Traqueur", "Sentinelle", "Pulse", "Parasite"]],
+            1: [
+                ["Traqueur"],
+                ["Traqueur", "Sentinelle"],
+                ["Traqueur", "Sentinelle"]
+            ],
+            2: [
+                ["Traqueur", "Drone"],
+                ["Sentinelle", "Pulse"],
+                ["Traqueur", "Sentinelle", "Pulse"]
+            ],
+            3: [
+                ["Sentinelle", "Pulse"],
+                ["Traqueur", "Pulse", "Drone"],
+                ["Traqueur", "Sentinelle", "Drone"]
+            ],
+            4: [
+                ["Sentinelle", "Pulse", "Drone"],
+                ["Traqueur", "Sentinelle", "Pulse", "Tank"],
+                ["Traqueur", "Sentinelle", "Pulse", "Parasite"]
+            ],
             5: [["NEXUS"]]
         };
         return progression[floorNumber][roomIndex] || ["Traqueur"];

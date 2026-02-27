@@ -43,9 +43,29 @@ export class RoomPortals {
     }
 
 // Assurez-vous que les adaptateurs enregistrent bien le mesh dans le manager
-    static createRoomPortal(manager, position, nextRoomIndex) {
+    static createRoomPortal(manager, position, nextRoomIndex, playerSpawnPos) {
         const visual = this.createPortalVisual(manager.scene, position, new Color3(0, 1, 1));
-        // CRITIQUE : Les métadonnées DOIVENT être sur le mesh retourné pour le LevelManager
+
+        if (playerSpawnPos) {
+            // ✅ CORRECTION: Orientation UNIQUE vers le spawn du joueur
+            // 1. Calcul de la direction sur le plan horizontal (X et Z uniquement)
+            const diffX = playerSpawnPos.x - position.x;
+            const diffZ = playerSpawnPos.z - position.z;
+
+            // 2. Calcul de l'angle ATAN2 pour une rotation Y pure
+            const angleY = Math.atan2(diffX, diffZ);
+
+            // 3. Application directe SANS aléatoire
+            // On force les rotations X et Z à 0 pour éviter l'inclinaison
+            visual.rotation = new Vector3(0, angleY, 0);
+
+            console.log(`🚪 Portal at (${position.x}, ${position.z}) oriented towards spawn (${playerSpawnPos.x}, ${playerSpawnPos.z}) - Angle: ${(angleY * 180 / Math.PI).toFixed(1)}°`);
+        } else {
+            // Fallback: orientation par défaut (face à la caméra initiale)
+            visual.rotation = new Vector3(0, 0, 0);
+            console.warn("⚠️ No player spawn position provided for portal orientation");
+        }
+
         visual.metadata = { isLocked: false, nextRoomIndex: nextRoomIndex };
         manager.portals.push(visual);
         manager.envNodes.push(visual);
@@ -66,10 +86,55 @@ export class RoomPortals {
         return ps;
     }
 
+    // RoomPortals.js
+
+    /**
+     * Crée le portail de changement d'étage (Cylindre Orange)
+     */
     static createFloorPortal(manager, position) {
-        const visual = this.createPortalVisual(manager.scene, position, new Color3(0.8, 0, 1)); // Violet pour l'étage
-        manager.exitTrigger = visual;
-        manager.envNodes.push(visual);
+        const scene = manager.scene;
+        const orangeColor = new Color3(1, 0.5, 0); // Orange néon
+
+        // 1. Zone de collision (Trigger)
+        const portalGroup = MeshBuilder.CreateCylinder("floorPortalTrigger", { height: 4, diameter: 3 }, scene);
+        portalGroup.position = position.clone();
+        portalGroup.position.y = 2; // Centré verticalement
+        portalGroup.isVisible = false;
+
+        // 2. Le Cylindre Visuel (Effet énergétique)
+        const visualCylinder = MeshBuilder.CreateCylinder("portalCylinder", { height: 4, diameter: 2.8, sideOrientation: 2 }, scene);
+        visualCylinder.parent = portalGroup;
+
+        const cylMat = new StandardMaterial("cylMat", scene);
+        cylMat.emissiveColor = orangeColor;
+        cylMat.diffuseColor = orangeColor;
+        cylMat.alpha = 0.4; // Semi-transparent
+        visualCylinder.material = cylMat;
+
+        // 3. Anneaux de base et de sommet (Optionnel, pour le style "Plateforme")
+        const ringConfig = { diameter: 3.2, height: 0.2 };
+        const baseRing = MeshBuilder.CreateCylinder("baseRing", ringConfig, scene);
+        baseRing.parent = portalGroup;
+        baseRing.position.y = -1.9;
+
+        const ringMat = new StandardMaterial("ringMat", scene);
+        ringMat.emissiveColor = orangeColor.scale(0.5);
+        baseRing.material = ringMat;
+
+        const topRing = baseRing.clone("topRing");
+        topRing.position.y = 1.9;
+
+        // 4. Lumière et Particules
+        const light = new PointLight("floorPortalLight", new Vector3(0, 0, 0), scene);
+        light.parent = portalGroup;
+        light.diffuse = orangeColor;
+        light.intensity = 2;
+
+        this._addParticles(scene, portalGroup, orangeColor);
+
+        // Enregistrement dans le manager
+        manager.exitTrigger = portalGroup;
+        manager.envNodes.push(portalGroup);
     }
 
     static createGrandPortal(manager, position) {

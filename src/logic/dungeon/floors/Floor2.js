@@ -1,242 +1,157 @@
 import { Vector3 } from "@babylonjs/core";
+import { BaseFloor } from "./BaseFloor.js";
 
-export class Floor2 {
+export class Floor2 extends BaseFloor {
+
     static generate(room, roomIndex, aiData) {
+        // L'équilibre est maintenu autour de ~110 plateformes par salle
         switch (roomIndex) {
-            case 0: return this._room1_TheElbow(room);
-            case 1: return this._room2_TheThreeSpheres(room);
-            case 2: return this._room3_TheH(room);
+            case 0: return this._room1_TheCross(room);
+            case 1: return this._room2_TheDiamondRing(room); // Mis à jour avec ponts d'accès
+            case 2: return this._room3_TheSplitSquare(room);  // Mis à jour avec ponts courts
         }
     }
 
-    /**
-     * SALLE 1 — LE COUDE
-     * 🎨 Structure: Carré + couloir en L
-     * Taille: ~35-40 plateformes
-     */
-    static _room1_TheElbow(room) {
+    /* ==========================================================
+       ROOM 1 — THE CROSS (Rappel pour cohérence)
+    ========================================================== */
+    static _room1_TheCross(room) {
         const spacing = 4;
-        const side = 4; // Augmenté de 3 à 4
-        const segment1Len = 6; // Fixe au lieu de random
-        const segment2Len = 5; // Fixe
-        const entryLen = 4; // Augmenté
-        const platforms = [];
+        const coreSize = 5;
+        const armLen = 6;
+        const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
-        // 1. Arène carrée finale (agrandie)
-        for (let x = -side; x <= side; x++) {
-            for (let z = -side; z <= side; z++) {
+        // Centre de la croix (Arena)
+        for (let x = -coreSize; x <= coreSize; x++) {
+            for (let z = -coreSize; z <= coreSize; z++) {
                 const pos = new Vector3(x * spacing, 0, z * spacing);
                 room.addPlatform(pos);
                 platforms.push(pos);
+                arenaPlatforms.push(pos);
             }
         }
 
-        // 2. Segment vertical (vers le bas) — largeur 3 pour plus de stabilité
-        for (let z = 1; z <= segment1Len; z++) {
-            const baseZ = -(side + z) * spacing;
-            for (let w = -1; w <= 1; w++) {
-                room.addPlatform(new Vector3(w * spacing, 0, baseZ));
+        // Bras de la croix (Extensions)
+        const directions = [{x:1,z:0}, {x:-1,z:0}, {x:0,z:1}, {x:0,z:-1}];
+        directions.forEach(dir => {
+            for (let i = coreSize + 1; i <= coreSize + armLen; i++) {
+                for (let w = -1; w <= 1; w++) {
+                    const px = (dir.x !== 0) ? dir.x * i : w;
+                    const pz = (dir.z !== 0) ? dir.z * i : w;
+                    const pos = new Vector3(px * spacing, 0, pz * spacing);
+                    room.addPlatform(pos);
+                    platforms.push(pos);
+                    extensionPlatforms.push(pos);
+                }
             }
-        }
+        });
 
-        // 3. Segment horizontal (vers la gauche) — largeur 3
-        const elbowZ = -(side + segment1Len) * spacing;
-        for (let x = 1; x <= segment2Len; x++) {
-            const baseX = -x * spacing;
-            for (let w = -1; w <= 1; w++) {
-                room.addPlatform(new Vector3(baseX, 0, elbowZ + w * spacing));
-            }
-        }
-
-        // 4. Entrée élargie
-        for (let i = 1; i <= entryLen; i++) {
-            const baseX = -(segment2Len + i) * spacing;
-            for (let w = -1; w <= 1; w++) {
-                room.addPlatform(new Vector3(baseX, 0, elbowZ + w * spacing));
-            }
-        }
-
-        // Ajouter un petit élargissement au coude pour plus de fluidité
-        for (let w = -2; w <= 2; w++) {
-            room.addPlatform(new Vector3(-segment2Len * spacing, 0, elbowZ + w * spacing));
-            room.addPlatform(new Vector3((w) * spacing, 0, elbowZ));
-        }
-
-        const playerSpawnPos = new Vector3(-(segment2Len + entryLen) * spacing, 1, elbowZ);
+        const playerSpawnPos = new Vector3(0, 1, -(coreSize + armLen) * spacing);
         room.setSpawnPosition(playerSpawnPos);
-        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 6);
+        this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 
-    /**
-     * SALLE 2 — LES TROIS SPHÈRES
-     * 🎨 Structure: 3 cercles alignés avec ponts
-     * Taille: ~35-40 plateformes
-     */
-    static _room2_TheThreeSpheres(room) {
+    /* ==========================================================
+       ROOM 2 — THE DIAMOND RING (CORRIGÉE)
+       Noyau central désormais accessible via 4 ponts étroits.
+    ========================================================== */
+    static _room2_TheDiamondRing(room) {
         const spacing = 4;
-        const radius = 4;
-        const platforms = [];
+        const innerRadius = 3;
+        const outerRadius = 7;
+        const coreRadius = 1.5; // Rayon du noyau central
+        const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
-        // Positions des 3 cercles (légèrement plus espacés)
-        const circlePositions = [-9, 0, 9];
+        for (let x = -outerRadius; x <= outerRadius; x++) {
+            for (let z = -outerRadius; z <= outerRadius; z++) {
+                const dist = Math.sqrt(x*x + z*z);
+                const pos = new Vector3(x * spacing, 0, z * spacing);
 
-        // Créer les 3 cercles
-        circlePositions.forEach(offsetX => {
-            for (let x = -radius; x <= radius; x++) {
-                for (let z = -radius; z <= radius; z++) {
-                    if (x * x + z * z <= radius * radius) {
-                        const pos = new Vector3((x + offsetX) * spacing, 0, z * spacing);
-                        room.addPlatform(pos);
-                        platforms.push(pos);
-                    }
+                // Anneau extérieur (Arena Principale)
+                if (dist <= outerRadius && dist >= innerRadius + 1) {
+                    room.addPlatform(pos);
+                    platforms.push(pos);
+                    arenaPlatforms.push(pos);
                 }
-            }
-        });
-
-        // Ponts entre les cercles (plus larges)
-        for (let x = -8; x <= -1; x++) {
-            for (let w = -2; w <= 2; w++) {
-                room.addPlatform(new Vector3(x * spacing, 0, w * spacing));
-            }
-        }
-
-        for (let x = 1; x <= 8; x++) {
-            for (let w = -2; w <= 2; w++) {
-                room.addPlatform(new Vector3(x * spacing, 0, w * spacing));
-            }
-        }
-
-        // Élargir les connexions aux cercles
-        const connectionPoints = [-9, -8, 8, 9];
-        connectionPoints.forEach(xPos => {
-            for (let z = -2; z <= 2; z++) {
-                room.addPlatform(new Vector3(xPos * spacing, 0, z * spacing));
-            }
-        });
-
-        // Ajouter des plateformes de stabilisation au centre
-        for (let x = -2; x <= 2; x++) {
-            for (let z = -3; z <= 3; z++) {
-                if (Math.abs(z) <= 3) {
-                    room.addPlatform(new Vector3(x * spacing, 0, z * spacing));
+                // Noyau central (Extension)
+                else if (dist <= coreRadius) {
+                    room.addPlatform(pos);
+                    platforms.push(pos);
+                    extensionPlatforms.push(pos);
                 }
             }
         }
 
-        // Couloir de spawn (vers le bas) - plus long pour équilibrer
-        const spawnCorridorLen = 7;
-        for (let i = 1; i <= spawnCorridorLen; i++) {
-            for (let w = -1; w <= 1; w++) {
-                room.addPlatform(new Vector3(
-                    -9 * spacing,
-                    0,
-                    (radius + i) * spacing
-                ));
+        // --- NOUVEAU : PONT ACCÈS VERS LE CENTRE (X4) ---
+        // Ponts Nord, Sud, Est, Ouest (largeur 1)
+        const bridgeDirs = [{x:1,z:0}, {x:-1,z:0}, {x:0,z:1}, {x:0,z:-1}];
+        bridgeDirs.forEach(dir => {
+            // Relie le noyau (coreRadius) à l'anneau (innerRadius + 1)
+            for (let i = Math.floor(coreRadius) + 1; i <= Math.floor(innerRadius + 1) - 1; i++) {
+                const pos = new Vector3(dir.x * i * spacing, 0, dir.z * i * spacing);
+                room.addPlatform(pos);
+                platforms.push(pos);
+                extensionPlatforms.push(pos);
             }
+        });
+
+        // Couloir d'entrée
+        for (let i = 1; i <= 5; i++) {
+            const pos = new Vector3(0, 0, -(outerRadius + i) * spacing);
+            room.addPlatform(pos);
+            platforms.push(pos);
+            extensionPlatforms.push(pos);
         }
 
-        // Élargir la sortie du spawn
-        for (let i = 1; i <= 2; i++) {
-            room.addPlatform(new Vector3(-9 * spacing, 0, (radius + spawnCorridorLen + i) * spacing));
-        }
-
-        const playerSpawnPos = new Vector3(
-            -9 * spacing,
-            1,
-            (radius + spawnCorridorLen + 1) * spacing
-        );
+        const playerSpawnPos = new Vector3(0, 1, -(outerRadius + 5) * spacing);
         room.setSpawnPosition(playerSpawnPos);
-        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 6);
+        this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 
-    /**
-     * SALLE 3 — LE H
-     * 🎨 Structure: 2 cercles reliés par un pont
-     * Taille: ~35-40 plateformes
-     */
-    static _room3_TheH(room) {
+    /* ==========================================================
+       ROOM 3 — THE SPLIT SQUARE (CORRIGÉE)
+       L'écart (gap) entre les rectangles est réduit, raccourcissant les ponts.
+    ========================================================== */
+    static _room3_TheSplitSquare(room) {
         const spacing = 4;
-        const radius = 5; // Légèrement augmenté
-        const bridgeLen = 7; // Augmenté
-        const spawnCorridorLen = 6;
-        const platforms = [];
+        const rectW = 4; // Réduit de 5 à 4
+        const rectH = 6; // Réduit de 8 à 6
+        const gap = 2;   // Ponts courts maintenus
+        const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
-        // Cercles gauche et droit (agrandis)
-        [-bridgeLen, bridgeLen].forEach(offsetX => {
-            for (let x = -radius; x <= radius; x++) {
-                for (let z = -radius; z <= radius; z++) {
-                    if (x * x + z * z <= radius * radius) {
-                        const pos = new Vector3((x + offsetX) * spacing, 0, z * spacing);
-                        room.addPlatform(pos);
-                        platforms.push(pos);
-                    }
+        // Deux zones de combat principales (légèrement plus petites)
+        [-1, 1].forEach(side => {
+            for (let x = -rectW; x <= rectW; x++) {
+                for (let z = 0; z <= rectH; z++) {
+                    const offsetZ = side * (gap + z);
+                    const pos = new Vector3(x * spacing, 0, offsetZ * spacing);
+                    room.addPlatform(pos);
+                    platforms.push(pos);
+                    arenaPlatforms.push(pos);
                 }
             }
         });
 
-        // Pont central (élargi)
-        for (let i = -bridgeLen + radius; i <= bridgeLen - radius; i++) {
-            for (let w = -2; w <= 2; w++) {
-                room.addPlatform(new Vector3(i * spacing, 0, w * spacing));
-            }
-        }
-
-        // Élargir les connexions entre le pont et les cercles
-        [-bridgeLen + radius, bridgeLen - radius].forEach(xPos => {
-            for (let z = -3; z <= 3; z++) {
-                room.addPlatform(new Vector3(xPos * spacing, 0, z * spacing));
+        // 3 Ponts de liaison
+        [-rectW, 0, rectW].forEach(bridgeX => {
+            for (let z = -gap + 1; z <= gap - 1; z++) { // Ajustement boucle pour éviter overlap
+                const pos = new Vector3(bridgeX * spacing, 0, z * spacing);
+                room.addPlatform(pos);
+                platforms.push(pos);
+                extensionPlatforms.push(pos);
             }
         });
 
-        // Ajouter des plateformes supplémentaires dans les cercles pour plus de volume
-        [-bridgeLen, bridgeLen].forEach(offsetX => {
-            for (let x = -2; x <= 2; x++) {
-                for (let z = -2; z <= 2; z++) {
-                    if (Math.abs(x) + Math.abs(z) <= 3) {
-                        room.addPlatform(new Vector3((x + offsetX) * spacing, 0, (z + 3) * spacing));
-                        room.addPlatform(new Vector3((x + offsetX) * spacing, 0, (z - 3) * spacing));
-                    }
-                }
-            }
-        });
-
-        // Couloir de spawn (vers le bas)
-        for (let i = 1; i <= spawnCorridorLen; i++) {
-            for (let w = -1; w <= 1; w++) {
-                room.addPlatform(new Vector3(-bridgeLen * spacing, 0, (radius + i) * spacing));
-            }
+        // Couloir d'entrée (7 unités pour garder un spawn éloigné)
+        for (let i = 1; i <= 7; i++) {
+            const pos = new Vector3(0, 0, -(gap + rectH + i) * spacing);
+            room.addPlatform(pos);
+            platforms.push(pos);
+            extensionPlatforms.push(pos);
         }
 
-        // Élargir la sortie du spawn
-        for (let i = 1; i <= 2; i++) {
-            room.addPlatform(new Vector3(-bridgeLen * spacing, 0, (radius + spawnCorridorLen + i) * spacing));
-        }
-
-        const playerSpawnPos = new Vector3(
-            -bridgeLen * spacing,
-            1,
-            (radius + spawnCorridorLen + 1) * spacing
-        );
+        const playerSpawnPos = new Vector3(0, 1, -(gap + rectH + 7) * spacing);
         room.setSpawnPosition(playerSpawnPos);
-        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 7);
-    }
-
-    static _spawnRandomEnemies(room, platforms, playerPos, count) {
-        const minDistance = 22;
-
-        // Nettoyer les doublons
-        const uniquePlatforms = platforms.filter((p, index, self) =>
-            index === self.findIndex(t => t.x === p.x && t.z === p.z)
-        );
-
-        let validPoints = uniquePlatforms.filter(p =>
-            Vector3.Distance(p, playerPos) > minDistance
-        );
-
-        validPoints.sort(() => Math.random() - 0.5);
-
-        for (let i = 0; i < Math.min(count, validPoints.length); i++) {
-            room.addSpawnPoint(new Vector3(validPoints[i].x, 1, validPoints[i].z));
-        }
+        this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 }

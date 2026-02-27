@@ -162,19 +162,20 @@ export class LevelManager {
         }
 
         const isLastRoom = (roomIndex === config.rooms - 1);
-        // On récupère la position propre
         const pos = exitPlatform.position ? exitPlatform.position : exitPlatform;
+
+        // Récupération de la position de spawn de la salle actuelle
+        const playerSpawn = this.currentRoom ? this.currentRoom.spawnPosition : null;
 
         if (isLastRoom) {
             if (this.currentFloor < 5) {
-                // Utilise maintenant le visuel d'arche violet pour l'étage
                 this.roomManager.createFloorPortal(pos);
             } else {
                 this.bossExitPosition = pos;
             }
         } else {
-            // Utilise le visuel d'arche cyan pour la salle suivante
-            this.roomManager.createRoomPortal(pos, roomIndex + 1);
+            // Transmission du playerSpawn pour l'orientation
+            this.roomManager.createRoomPortal(pos, roomIndex + 1, playerSpawn);
         }
     }
 
