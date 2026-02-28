@@ -15,7 +15,8 @@ export class InputManager {
             interact: false
         };
         this.interactPressedOnce = false;
-        this.aiCollector = null; // Sera injecté via GameManager
+        this.dashPressedOnce = false; // ✅ AJOUT: Flag pour dash unique
+        this.aiCollector = null;
         this._initListeners();
     }
 
@@ -58,10 +59,14 @@ export class InputManager {
                 if (isPressed && ai) ai.recordMove("right");
                 break;
 
-            // Dash (Espace)
+            // Dash (Espace) - ✅ CORRIGÉ: Événement unique
             case " ":
+                if (isPressed && !this.keys.dash) {
+                    // Premier appui uniquement
+                    this.dashPressedOnce = true;
+                    if (ai) ai.recordDash();
+                }
                 this.keys.dash = isPressed;
-                if (isPressed && ai) ai.recordDash();
                 break;
 
             // Zoom (Z / X pour correspondre à ton InputManager précédent)
@@ -81,7 +86,15 @@ export class InputManager {
 
     isZoomInTriggered() { return this.keys.zoomIn; }
     isZoomOutTriggered() { return this.keys.zoomOut; }
-    isDashTriggered() { return this.keys.dash; }
+
+    // ✅ CORRIGÉ: Dash comme événement unique
+    isDashTriggered() {
+        if (this.dashPressedOnce) {
+            this.dashPressedOnce = false;
+            return true;
+        }
+        return false;
+    }
 
     isInteractTriggered() {
         if (this.interactPressedOnce) {

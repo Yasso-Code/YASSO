@@ -5,11 +5,6 @@ import { BaseFloor } from "./BaseFloor.js";
  * 🟣 ÉTAGE 3: BUFFER
  */
 export class Floor3 extends BaseFloor {
-    static CONFIG = {
-        density: 0.045,          // ennemis par plateforme
-        spawnSafeRadius: 18,     // distance safe autour du joueur
-        arenaEnemyRatio: 0.7     // % ennemis dans zone principale
-    };
 
     static generate(room, roomIndex, aiData) {
         switch (roomIndex) {
@@ -55,9 +50,11 @@ export class Floor3 extends BaseFloor {
             }
         }
 
-        // --- PONTS CARDINAUX ---
+        // --- PONTS CARDINAUX (N et S uniquement) ---
+        // Les ponts E/W sont supprimés pour éviter un chemin direct vers le portail
+        // Le joueur doit contourner via l'anneau extérieur
         const bridgeDirs = [
-            {x:1,z:0}, {x:-1,z:0}, {x:0,z:1}, {x:0,z:-1}
+            {x:0,z:1}, {x:0,z:-1}
         ];
         bridgeDirs.forEach(dir => {
             for (let i = innerRadius+1; i <= outerRadius-2; i++) {
@@ -77,107 +74,105 @@ export class Floor3 extends BaseFloor {
 
     /* ==========================================================
        SALLE 2 — NEURAL STRANDS
-       Plusieurs clusters de plateformes reliés par des filaments
+       Anneau ovale avec PLATEFORME HEXAGONALE pour le portail (sud)
     ========================================================== */
     static _room2_DataLoop(room) {
-        const spacing = 4;
+        // FORME : ARCHIPEL EN CROIX
+        // 4 iles rectangulaires aux 4 coins, reliees par des ponts etroits (1 tile)
+        // vers une arena centrale hexagonale
+        // Spawn sur l'ile sud-ouest (la plus eloignee du portail)
+        // Portail sur l'ile nord-est (la plus eloignee du spawn)
+
+        const sp = 4;
         const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
-        const outerRadiusX = 10; // largeur
-        const outerRadiusZ = 6;  // hauteur
-        const innerRadiusX = 5;  // largeur du vide intérieur
-        const innerRadiusZ = 3;  // hauteur du vide intérieur
+        const addP = (x, z, isArena = false) => {
+            const pos = new Vector3(x * sp, 0, z * sp);
+            room.addPlatform(pos); platforms.push(pos);
+            (isArena ? arenaPlatforms : extensionPlatforms).push(pos);
+        };
 
-        // --- ANNEAU OVALE ---
-        for (let x = -outerRadiusX; x <= outerRadiusX; x++) {
-            for (let z = -outerRadiusZ; z <= outerRadiusZ; z++) {
+        // Arena centrale circulaire r=4
+        for (let x = -4; x <= 4; x++)
+            for (let z = -4; z <= 4; z++)
+                if (x*x + z*z <= 16)
+                    addP(x, z, true);
 
-                const outerCheck = (x * x) / (outerRadiusX * outerRadiusX) + (z * z) / (outerRadiusZ * outerRadiusZ);
-                const innerCheck = (x * x) / (innerRadiusX * innerRadiusX) + (z * z) / (innerRadiusZ * innerRadiusZ);
+        // Ile sud-ouest  x:-10..-6  z:-10..-6  (5x5=25)
+        for (let x = -10; x <= -6; x++)
+            for (let z = -10; z <= -6; z++)
+                addP(x, z);
 
-                // On garde uniquement l'anneau
-                if (outerCheck <= 1 && innerCheck >= 1) {
-                    const pos = new Vector3(x * spacing, 0, z * spacing);
-                    room.addPlatform(pos);
-                    platforms.push(pos);
+        // Pont SW -> arena : x=-6 fixe z:-6..-3, puis x:-6..-2 z=-3
+        for (let z = -6; z <= -3; z++) addP(-6, z);
+        for (let x = -6; x <= -2; x++) addP(x, -3);
 
-                    // Zone centrale vs périphérie
-                    if (outerCheck < 0.5) {
-                        arenaPlatforms.push(pos);
-                    } else {
-                        extensionPlatforms.push(pos);
-                    }
-                }
-            }
-        }
+        // Ile nord-est  x:6..10  z:6..10  (5x5=25)  <- portail ici
+        for (let x = 6; x <= 10; x++)
+            for (let z = 6; z <= 10; z++)
+                addP(x, z);
 
-        // --- PONTS LATÉRAUX ---
-        for (let i = -2; i <= 2; i++) {
-            const left = new Vector3(-(outerRadiusX + 1) * spacing, 0, i * spacing);
-            const right = new Vector3((outerRadiusX + 1) * spacing, 0, i * spacing);
+        // Pont NE -> arena : x=6 fixe z:6..3, puis x:6..2 z=3
+        for (let z = 3; z <= 6; z++) addP(6, z);
+        for (let x = 2; x <= 6; x++) addP(x, 3);
 
-            room.addPlatform(left);
-            room.addPlatform(right);
-
-            platforms.push(left, right);
-            extensionPlatforms.push(left, right);
-        }
-
-        // --- ENTRÉE SUD ---
-        for (let i = 1; i <= 4; i++) {
-            const pos = new Vector3(0, 0, -(outerRadiusZ + i) * spacing);
-            room.addPlatform(pos);
-            platforms.push(pos);
-            extensionPlatforms.push(pos);
-        }
-
-        // --- SPAWN ---
-        const playerSpawnPos = new Vector3(0, 1, -(outerRadiusZ + 4) * spacing);
+        // Spawn sur ile sud-ouest
+        const playerSpawnPos = new Vector3(-8 * sp, 1, -8 * sp);
         room.setSpawnPosition(playerSpawnPos);
 
-        // --- SPAWN ENNEMIS ---
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 
-
-    /* ==========================================================
-       SALLE 3 — THE FRACTAL SPIRAL
-       Spirale carrée avec clusters aux angles
-    ========================================================== */
     static _room3_TheFractalSpiral(room) {
+        // FORME : 3 ILES EN TRIANGLE reliees par couloirs etroits (2 tiles)
+        //
+        // Zone 1 — ENTREE (spawn)  : ile SW  x:-8..-4  z:-8..-4
+        // Couloir 1 (2 tiles large): x:-4..-1  z:-4, puis  x:-1  z:-4..-1
+        // Zone 2 — ARENA centrale  : ile       x:-2..2   z:-2..2
+        // Couloir 2 (2 tiles large): x:2..6    z:1,  puis  x:6   z:1..5
+        // Zone 3 — SORTIE (portail): ile NE    x:5..9    z:4..8
+        //
+        // Spawn : centre ile SW (-6,-6)
+        // Portail : getExitPlatform choisit ile NE — la plus eloignee (71 units)
+
         const spacing = 4;
         const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
-        let currentPos = {x:0, z:0};
-        const steps = [10,8,6,4];
-        const dirs = [{x:1,z:0},{x:0,z:1},{x:-1,z:0},{x:0,z:-1}];
-
-        steps.forEach((step,index)=>{
-            const dir = dirs[index%4];
-            for(let i=0;i<step;i++){
-                currentPos.x += dir.x;
-                currentPos.z += dir.z;
-                const pos = new Vector3(currentPos.x*spacing,0,currentPos.z*spacing);
-                room.addPlatform(pos);
-                platforms.push(pos);
-                extensionPlatforms.push(pos);
+        const addP = (x, z, isArena = false) => {
+            const pos = new Vector3(x * spacing, 0, z * spacing);
+            if (!platforms.some(p => p.x === pos.x && p.z === pos.z)) {
+                room.addPlatform(pos); platforms.push(pos);
+                (isArena ? arenaPlatforms : extensionPlatforms).push(pos);
             }
+        };
 
-            // --- CLUSTERS AUX ANGLES ---
-            for(let dx=-2; dx<=2; dx++){
-                for(let dz=-2; dz<=2; dz++){
-                    const pos = new Vector3((currentPos.x+dx)*spacing,0,(currentPos.z+dz)*spacing);
-                    if(!platforms.some(p=>p.x===pos.x && p.z===pos.z)){
-                        room.addPlatform(pos);
-                        platforms.push(pos);
-                        arenaPlatforms.push(pos);
-                    }
-                }
-            }
-        });
+        // Zone 1 — ile SW (spawn)
+        for (let x = -8; x <= -4; x++)
+            for (let z = -8; z <= -4; z++)
+                addP(x, z, false);
 
-        const playerSpawnPos = new Vector3(0,1,0);
+        // Couloir 1 : de ile SW vers arena (L shape, 2 tiles large)
+        for (let x = -4; x <= -1; x++) { addP(x, -4); addP(x, -3); }  // horizontal
+        for (let z = -3; z <= -1; z++) { addP(-1, z);  addP(0, z);  }  // vertical
+
+        // Zone 2 — arena centrale
+        for (let x = -2; x <= 2; x++)
+            for (let z = -2; z <= 2; z++)
+                addP(x, z, true);
+
+        // Couloir 2 : de arena vers ile NE (L shape, 2 tiles large)
+        for (let x = 2; x <= 6; x++)  { addP(x, 2); addP(x, 1); }     // horizontal
+        for (let z = 2; z <= 5; z++)  { addP(6, z); addP(7, z); }      // vertical
+
+        // Zone 3 — ile NE (portail)
+        for (let x = 5; x <= 9; x++)
+            for (let z = 5; z <= 9; z++)
+                addP(x, z, false);
+
+        // Spawn centre ile SW
+        const playerSpawnPos = new Vector3(-6 * spacing, 1, -6 * spacing);
         room.setSpawnPosition(playerSpawnPos);
+
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 

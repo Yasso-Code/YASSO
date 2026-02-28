@@ -207,6 +207,7 @@ export class GameManager {
         this.ai.reset();
         this.gameStartTime = Date.now();
 
+
         // ✅ Charger le premier étage (spawnPlayer inclus)
         this.levelManager.loadFloor(1, this.player, this.ai);
     }

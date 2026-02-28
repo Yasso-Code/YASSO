@@ -1,133 +1,131 @@
 import { Vector3 } from "@babylonjs/core";
+import { BaseFloor } from "./BaseFloor.js";
 
-export class Floor4 {
+export class Floor4 extends BaseFloor {
+
     static generate(room, roomIndex, aiData) {
         switch (roomIndex) {
-            case 0: return this._room1_Crescent(room);
-            case 1: return this._room2_DoubleHex(room);
-            case 2: return this._room3_BrokenMaze(room);
+            case 0: return this._room1_TheVoidThrone(room);
+            case 1: return this._room2_FractalShatter(room);
+            case 2: return this._room3_GlitchCorridors(room);
         }
     }
 
-    /**
-     * SALLE 1 — LE CROISSANT
-     * Grande forme courbe, asymétrique mais lisible.
-     */
-    static _room1_Crescent(room) {
-        const spacing = 4;
-        const radius = 8;
-        const thickness = 3;
-        const platforms = [];
+    // ─────────────────────────────
+    // ROOM 1
+    // ─────────────────────────────
+    static _room1_TheVoidThrone(room) {
+        const sp = 4;
+        const platforms = [], arena = [], ext = [];
 
-        for (let x = -radius; x <= radius; x++) {
-            for (let z = -radius; z <= radius; z++) {
-                const d = Math.sqrt(x * x + z * z);
+        const addP = (x, z, y = 0, isArena = false) => {
+            const pos = new Vector3(x * sp, y, z * sp);
+            room.addPlatform(pos);
+            platforms.push(pos);
+            (isArena ? arena : ext).push(pos);
+        };
 
-                // Croissant = anneau partiel
-                if (d <= radius && d >= radius - thickness && x > -2) {
-                    const pos = new Vector3(x * spacing, 0, z * spacing);
-                    room.addPlatform(pos);
-                    platforms.push(pos);
-                }
-            }
-        }
+        // Zone 1
+        for (let x = -8; x <= 8; x++)
+            for (let z = -6; z <= -2; z++)
+                addP(x, z);
 
-        // Couloir Sud
-        for (let i = 1; i <= 5; i++) {
-            room.addPlatform(new Vector3(0, 0, -(radius + i) * spacing));
-        }
+        // Zone 2 (même hauteur)
+        for (let x = -8; x <= 8; x++)
+            for (let z = 2; z <= 6; z++)
+                addP(x, z, 0, true);
 
-        const playerSpawnPos = new Vector3(0, 1, -(radius + 5) * spacing);
-        room.setSpawnPosition(playerSpawnPos);
+        // Pont gauche
+        for (let x = -7; x <= -5; x++)
+            for (let z = -2; z <= 2; z++)
+                addP(x, z);
 
-        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 7);
+        // Pont droit
+        for (let x = 5; x <= 7; x++)
+            for (let z = -2; z <= 2; z++)
+                addP(x, z);
+
+        const spawnPos = new Vector3(0, 0, -4 * sp);
+        room.setSpawnPosition(new Vector3(0, 1, -4 * sp));
+
+        this.spawnBalancedEnemies(room, platforms, arena, ext, spawnPos);
     }
 
-    /**
-     * SALLE 2 — DOUBLE HEXAGONE
-     * Deux hexagones reliés par un pont large.
-     */
-    static _room2_DoubleHex(room) {
-        const spacing = 4;
-        const radius = 4;
-        const gap = 10;
-        const platforms = [];
+    // ─────────────────────────────
+    // ROOM 2
+    // ─────────────────────────────
+    static _room2_FractalShatter(room) {
+        const sp = 4;
+        const platforms = [], arena = [], ext = [];
 
-        const hexCenters = [
-            new Vector3(-gap, 0, 0),
-            new Vector3(gap, 0, 0)
+        const addP = (x, z, y = 0, isArena = false) => {
+            const pos = new Vector3(x * sp, y, z * sp);
+            room.addPlatform(pos);
+            platforms.push(pos);
+            (isArena ? arena : ext).push(pos);
+        };
+
+        // Zone 1
+        for (let x = -10; x <= -4; x++)
+            for (let z = -10; z <= -4; z++)
+                addP(x, z);
+
+        // Pont 1
+        for (let x = -4; x <= 4; x++)
+            for (let z = -8; z <= -6; z++)
+                addP(x, z);
+
+        // Zone 2 (arena)
+        for (let x = 4; x <= 10; x++)
+            for (let z = -10; z <= -4; z++)
+                addP(x, z, 0, true);
+
+        // Pont 2
+        for (let x = 6; x <= 8; x++)
+            for (let z = -4; z <= 4; z++)
+                addP(x, z);
+
+        // Zone 3
+        for (let x = 4; x <= 10; x++)
+            for (let z = 4; z <= 10; z++)
+                addP(x, z);
+
+        const spawnPos = new Vector3(-7 * sp, 0, -7 * sp);
+        room.setSpawnPosition(new Vector3(-7 * sp, 1, -7 * sp));
+
+        this.spawnBalancedEnemies(room, platforms, arena, ext, spawnPos);
+    }
+
+    // ─────────────────────────────
+    // ROOM 3
+    // ─────────────────────────────
+    static _room3_GlitchCorridors(room) {
+        const sp = 4;
+        const platforms = [], arena = [], ext = [];
+
+        const addP = (x, z, y = 0, isArena = false) => {
+            const pos = new Vector3(x * sp, y, z * sp);
+            room.addPlatform(pos);
+            platforms.push(pos);
+            (isArena ? arena : ext).push(pos);
+        };
+
+        const segments = [
+            [-4, -10, -4, 3],
+            [ 2, -4,   2, 3],
+            [-2,  2,   8, 4],
         ];
 
-        // Deux hexagones pleins
-        hexCenters.forEach(center => {
-            for (let x = -radius; x <= radius; x++) {
-                for (let z = -radius; z <= radius; z++) {
-                    if (Math.abs(x) + Math.abs(z) + Math.abs(x + z) <= radius * 2) {
-                        const pos = new Vector3(center.x + x * spacing, 0, center.z + z * spacing);
-                        room.addPlatform(pos);
-                        platforms.push(pos);
-                    }
-                }
-            }
+        segments.forEach(([xc, zs, ze, w], idx) => {
+            const isArena = idx === 2;
+            for (let x = xc - w; x <= xc + w; x++)
+                for (let z = zs; z <= ze; z++)
+                    addP(x, z, 0, isArena);
         });
 
-        // Pont large entre les deux hexagones
-        for (let x = -gap + spacing; x <= gap - spacing; x += spacing) {
-            for (let w = -2; w <= 2; w++) {
-                room.addPlatform(new Vector3(x, 0, w * spacing));
-            }
-        }
+        const spawnPos = new Vector3(-4 * sp, 0, -10 * sp);
+        room.setSpawnPosition(new Vector3(-4 * sp, 1, -10 * sp));
 
-        const playerSpawnPos = new Vector3(-gap - 6, 1, 0);
-        room.setSpawnPosition(playerSpawnPos);
-
-        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 8);
-    }
-
-    /**
-     * SALLE 3 — LABYRINTHE BRISÉ
-     * Couloirs larges + zones ouvertes, sans trous noirs.
-     */
-    static _room3_BrokenMaze(room) {
-        const spacing = 4;
-        const width = 14;
-        const depth = 10;
-        const platforms = [];
-
-        // Grille principale
-        for (let x = -width; x <= width; x++) {
-            for (let z = -depth; z <= depth; z++) {
-                // On enlève quelques lignes pour créer un labyrinthe
-                if (z % 5 !== 0 && x % 6 !== 0) {
-                    const pos = new Vector3(x * spacing, 0, z * spacing);
-                    room.addPlatform(pos);
-                    platforms.push(pos);
-                }
-            }
-        }
-
-        // Couloir Nord
-        for (let i = 1; i <= 5; i++) {
-            room.addPlatform(new Vector3(0, 0, (depth + i) * spacing));
-        }
-
-        const playerSpawnPos = new Vector3(0, 1, (depth + 5) * spacing);
-        room.setSpawnPosition(playerSpawnPos);
-
-        this._spawnRandomEnemies(room, platforms, playerSpawnPos, 10);
-    }
-
-    /**
-     * Spawn sécurisé
-     */
-    static _spawnRandomEnemies(room, platforms, playerPos, count) {
-        const minDistance = 22;
-        let validPoints = platforms.filter(p => Vector3.Distance(p, playerPos) > minDistance);
-
-        validPoints.sort(() => Math.random() - 0.5);
-
-        for (let i = 0; i < Math.min(count, validPoints.length); i++) {
-            room.addSpawnPoint(new Vector3(validPoints[i].x, 1, validPoints[i].z));
-        }
+        this.spawnBalancedEnemies(room, platforms, arena, ext, spawnPos);
     }
 }

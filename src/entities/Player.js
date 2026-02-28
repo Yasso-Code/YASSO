@@ -102,9 +102,13 @@ export class Player {
     // VALIDATION DU SOL
     // ─────────────────────────────────────────────
     _isValidMove(targetPosition) {
-        const origin = new Vector3(targetPosition.x, 2, targetPosition.z);
+        // Le rayon part depuis la hauteur actuelle du joueur + marge haute
+        // pour eviter de rater les plateformes en hauteur (escaliers, rampes)
+        const rayOriginY = this.mesh.position.y + 4;
+        const origin = new Vector3(targetPosition.x, rayOriginY, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
-        const ray = new Ray(origin, direction, 5);
+        // Portee = hauteur du joueur + marge basse (autorise descente max de 2 units)
+        const ray = new Ray(origin, direction, 6.5);
 
         const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
             return mesh.name === "p" || mesh.name === "exit" || mesh.name.includes("portal");
