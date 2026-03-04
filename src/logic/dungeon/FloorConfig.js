@@ -55,16 +55,17 @@ export class FloorConfig {
         {
             id: 4,
             name: "Noyau",
-            color: new Color3(0.7, 0.1, 0.9), // Violet - Mystère, danger critique
+            // ✅ Changement pour un Jaune Électrique Cyber
+            color: new Color3(1.0, 0.84, 0.0),
             rooms: 3,
             roomType: "complex",
-            enemyType: "Mix",
-            philosophy: "INSTABILITÉ",
-            description: "Combat intense, IA agressive",
+            enemyType: "Tank",
+            philosophy: "SURCHARGE",
+            description: "Centre de données - Énergie critique",
             theme: {
-                ambientIntensity: 0.4,
+                ambientIntensity: 0.8,
                 fogDensity: 0.05,
-                emissiveMultiplier: 1.3
+                emissiveMultiplier: 2.0
             }
         },
         {

@@ -29,6 +29,18 @@ export class Player {
         this.powerTimer = 0;
 
         this.audioManager = null;
+
+        // DEBUG : power rouge actif par défaut
+        this._applyPowerVisual("Traqueur");
+    }
+
+    _applyPowerVisual(type) {
+        if (type === "Traqueur") {
+            this.speed = this.baseSpeed * 1.5;
+            this.activePower = "Traqueur";
+            this.powerTimer = Infinity;
+            if (this.mesh) this.mesh.material.emissiveColor = new Color3(1, 0, 0);
+        }
     }
 
     setAudioManager(audioManager) {
@@ -70,8 +82,8 @@ export class Player {
         this.currentHealth = this.maxHealth;
         this.isInvincible = false;
         this.mesh.material.alpha = 0.8;
-        this.deactivatePower();
         this.storedPower = null;
+        this._applyPowerVisual("Traqueur"); // DEBUG : power rouge permanent
     }
 
     // ─────────────────────────────────────────────
@@ -299,6 +311,8 @@ export class Player {
 
     deactivatePower() {
         if (!this.activePower) return;
+        // DEBUG : power rouge permanent — ne pas désactiver
+        if (this.powerTimer === Infinity) return;
 
         console.log("POWER UP ENDED");
         this.activePower = null;

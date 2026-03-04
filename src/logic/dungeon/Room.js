@@ -223,4 +223,25 @@ export class Room {
     setSpawnPosition(pos) {
         this.spawnPosition = pos.clone();
     }
+
+    setExitPortal(position) {
+        this.exitPortalPosition = position.clone();
+        // On garde une référence pour que le RoomManager puisse
+        // orienter le visuel lors du chargement.
+    }
+
+    /**
+     * Cette méthode (ou une logique similaire dans RoomManager)
+     * doit être appelée quand le mesh du portail est créé
+     */
+    orientPortal(portalMesh) {
+        if (portalMesh) {
+            // Le portail regarde le centre (0,0,0)
+            portalMesh.lookAt(new Vector3(0, 0, 0));
+
+            // Note : Si après le lookAt le portail est à l'envers
+            // (on voit le dos), décommentez la ligne suivante :
+            // portalMesh.rotation.y += Math.PI;
+        }
+    }
 }

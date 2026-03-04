@@ -5,23 +5,21 @@ export class Floor1 extends BaseFloor {
 
     static generate(room, roomIndex, aiData) {
         switch (roomIndex) {
-            case 0: return this._room1_CentralNode(room);
-            case 1: return this._room2_TheTwins(room);
-            case 2: return this._room3_BrokenStar(room);
+            case 0: return this._room1(room);
+            case 1: return this._room2(room);
+            case 2: return this._room3(room);
         }
     }
 
     /* ==========================================================
        SALLE 1 — NOEUD CENTRAL
     ========================================================== */
-    static _room1_CentralNode(room) {
+    static _room1(room) {
         const spacing = 4;
-        const radius = 5;
-        const platforms = [];
-        const arenaPlatforms = [];
-        const extensionPlatforms = [];
+        const radius = 4;
+        const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
-        // --- ARENA CENTRALE ---
+        // --- ARENA ---
         for (let x = -radius; x <= radius; x++) {
             for (let z = -radius; z <= radius; z++) {
                 if (x * x + z * z <= radius * radius) {
@@ -35,10 +33,10 @@ export class Floor1 extends BaseFloor {
 
         // --- COULOIRS ---
         const directions = [
-            { x: -1, z: 0, len: 4 },
-            { x: 1, z: 0, len: 3 },
-            { x: 0, z: 1, len: 3 },
-            { x: 0, z: -1, len: 4 }
+            { x: -1, z: 0, len: 1 }, // Ouest (Spawn)
+            { x: 1,  z: 0, len: 4 }, // Est
+            { x: 0,  z: 1, len: 0 }, // Nord (Sortie sur Z) -> len passé de 0 à 5
+            { x: 0,  z: -1, len: 0 }
         ];
 
         directions.forEach(dir => {
@@ -50,8 +48,13 @@ export class Floor1 extends BaseFloor {
             }
         });
 
+        // SPAWN sur l'axe X (Gauche)
         const playerSpawnPos = new Vector3(-(radius + directions[0].len) * spacing, 1, 0);
         room.setSpawnPosition(playerSpawnPos);
+
+        // SORTIE sur l'axe Z (Haut)
+        const exitPos = new Vector3(0, 0, (radius + directions[2].len) * spacing);
+        room.setExitPortal(exitPos);
 
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
@@ -59,7 +62,7 @@ export class Floor1 extends BaseFloor {
     /* ==========================================================
        SALLE 2 — THE TWINS
     ========================================================== */
-    static _room2_TheTwins(room) {
+    static _room2(room) {
         const spacing = 4;
         const radius = 4;
         const distBetween = 5;
@@ -90,7 +93,7 @@ export class Floor1 extends BaseFloor {
         }
 
         // --- COULOIR SPAWN ---
-        const corridorLen = 4;
+        const corridorLen = 2;
         for (let i = 1; i <= corridorLen; i++) {
             const pos = new Vector3(0, 0, (-distBetween - radius - i) * spacing);
             room.addPlatform(pos);
@@ -101,13 +104,17 @@ export class Floor1 extends BaseFloor {
         const playerSpawnPos = new Vector3(0, 1, (-distBetween - radius - corridorLen) * spacing);
         room.setSpawnPosition(playerSpawnPos);
 
+        // SORTIE : sommet de l'arène Nord
+        const exitPos = new Vector3(0, 0, (distBetween + radius) * spacing);
+        room.setExitPortal(exitPos);
+
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 
     /* ==========================================================
        SALLE 3 — BROKEN STAR
     ========================================================== */
-    static _room3_BrokenStar(room) {
+    static _room3(room) {
         const spacing = 4;
         const coreSize = 4;
         const platforms = [];
@@ -128,10 +135,10 @@ export class Floor1 extends BaseFloor {
 
         // --- BRAS ---
         const arms = [
-            { dir: new Vector3(1, 0, 0), len: 6 },
-            { dir: new Vector3(-1, 0, 0), len: 3 },
+            { dir: new Vector3(1, 0, 0), len: 1 },
+            { dir: new Vector3(-1, 0, 0), len: 1 },
             { dir: new Vector3(0, 0, 1), len: 5 },
-            { dir: new Vector3(0, 0, -1), len: 4 }
+            { dir: new Vector3(0, 0, -1), len: 2 }
         ];
 
         arms.forEach(arm => {
@@ -148,8 +155,13 @@ export class Floor1 extends BaseFloor {
         });
 
         const southArmLen = arms[3].len;
+        const northArmLen = arms[2].len;
         const playerSpawnPos = new Vector3(0, 1, -(coreSize + southArmLen) * spacing);
         room.setSpawnPosition(playerSpawnPos);
+
+        // SORTIE : bout du bras Nord
+        const exitPos = new Vector3(0, 0, (coreSize + northArmLen) * spacing);
+        room.setExitPortal(exitPos);
 
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }

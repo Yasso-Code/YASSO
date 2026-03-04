@@ -51,13 +51,10 @@ export class LevelManager {
         let spawnPos;
 
         if (position) {
-            // Position explicite fournie
             spawnPos = position.clone();
         } else if (this.currentRoom && this.currentRoom.spawnPosition) {
-            // Position définie par la salle
             spawnPos = this.currentRoom.spawnPosition.clone();
         } else {
-            // Fallback sécurité
             spawnPos = new Vector3(0, 0.8, 0);
         }
 
@@ -72,15 +69,30 @@ export class LevelManager {
         player.mesh.position.copyFrom(spawnPos);
 
         // ─────────────────────────────────────────────────────────
-        // 4. ACTIVATION PROTECTION ANTI-PORTAIL (500ms)
+        // 4. SNAP CAMÉRA — téléporte immédiatement la caméra
+        //    pour éviter le décalage de vue en début de salle.
+        //    Le GameManager expose snapCamera() qui repositionne
+        //    camera.position sans Lerp et remet l'offset à zéro.
+        // ─────────────────────────────────────────────────────────
+        if (this._snapCamera) {
+            this._snapCamera(spawnPos);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 5. ACTIVATION PROTECTION ANTI-PORTAIL (500ms)
         // ─────────────────────────────────────────────────────────
         this.spawnProtectionTime = Date.now() + 500;
 
-        // ─────────────────────────────────────────────────────────
-        // 5. LOG DE CONFIRMATION
-        // ─────────────────────────────────────────────────────────
         console.log(`🎮 Player spawned at (${spawnPos.x.toFixed(1)}, ${spawnPos.y.toFixed(1)}, ${spawnPos.z.toFixed(1)})`);
         console.log(`🛡️ Spawn protection: 500ms`);
+    }
+
+    /**
+     * Enregistre le callback de snap caméra fourni par GameManager.
+     * Appelé une fois à l'init : levelManager.setCameraSnap(pos => {...})
+     */
+    setCameraSnap(fn) {
+        this._snapCamera = fn;
     }
 
     /**

@@ -6,22 +6,22 @@ export class Floor2 extends BaseFloor {
     static generate(room, roomIndex, aiData) {
         // L'équilibre est maintenu autour de ~110 plateformes par salle
         switch (roomIndex) {
-            case 0: return this._room1_TheCross(room);
-            case 1: return this._room2_TheDiamondRing(room); // Mis à jour avec ponts d'accès
-            case 2: return this._room3_TheSplitSquare(room);  // Mis à jour avec ponts courts
+            case 0: return this._room1(room);
+            case 1: return this._room2(room); // Mis à jour avec ponts d'accès
+            case 2: return this._room3(room);  // Mis à jour avec ponts courts
         }
     }
 
     /* ==========================================================
        ROOM 1 — THE CROSS (Rappel pour cohérence)
     ========================================================== */
-    static _room1_TheCross(room) {
+    static _room1(room) {
         const spacing = 4;
-        const coreSize = 5;
-        const armLen = 6;
+        const coreSize = 3;
+        const armLen = 3;
         const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
-        // Centre de la croix (Arena)
+        // Centre de la croix (Arena) - Taille réduite
         for (let x = -coreSize; x <= coreSize; x++) {
             for (let z = -coreSize; z <= coreSize; z++) {
                 const pos = new Vector3(x * spacing, 0, z * spacing);
@@ -34,6 +34,7 @@ export class Floor2 extends BaseFloor {
         // Bras de la croix (Extensions)
         const directions = [{x:1,z:0}, {x:-1,z:0}, {x:0,z:1}, {x:0,z:-1}];
         directions.forEach(dir => {
+            // Les bras commencent maintenant à coreSize + 1
             for (let i = coreSize + 1; i <= coreSize + armLen; i++) {
                 for (let w = -1; w <= 1; w++) {
                     const px = (dir.x !== 0) ? dir.x * i : w;
@@ -46,8 +47,14 @@ export class Floor2 extends BaseFloor {
             }
         });
 
+        // Le spawn s'adapte automatiquement à la nouvelle position du bout du bras sud
         const playerSpawnPos = new Vector3(0, 1, -(coreSize + armLen) * spacing);
         room.setSpawnPosition(playerSpawnPos);
+
+        // SORTIE : bout du bras Nord
+        const exitPos = new Vector3(0, 0, (coreSize + armLen) * spacing);
+        room.setExitPortal(exitPos);
+
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 
@@ -55,10 +62,10 @@ export class Floor2 extends BaseFloor {
        ROOM 2 — THE DIAMOND RING (CORRIGÉE)
        Noyau central désormais accessible via 4 ponts étroits.
     ========================================================== */
-    static _room2_TheDiamondRing(room) {
+    static _room2(room) {
         const spacing = 4;
         const innerRadius = 3;
-        const outerRadius = 7;
+        const outerRadius = 6;
         const coreRadius = 1.5; // Rayon du noyau central
         const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
@@ -96,15 +103,20 @@ export class Floor2 extends BaseFloor {
         });
 
         // Couloir d'entrée
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 2; i++) {
             const pos = new Vector3(0, 0, -(outerRadius + i) * spacing);
             room.addPlatform(pos);
             platforms.push(pos);
             extensionPlatforms.push(pos);
         }
 
-        const playerSpawnPos = new Vector3(0, 1, -(outerRadius + 5) * spacing);
+        const playerSpawnPos = new Vector3(0, 1, -(outerRadius + 2) * spacing);
         room.setSpawnPosition(playerSpawnPos);
+
+        // SORTIE : côté Nord de l'anneau
+        const exitPos = new Vector3(0, 0, outerRadius * spacing);
+        room.setExitPortal(exitPos);
+
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 
@@ -112,10 +124,10 @@ export class Floor2 extends BaseFloor {
        ROOM 3 — THE SPLIT SQUARE (CORRIGÉE)
        L'écart (gap) entre les rectangles est réduit, raccourcissant les ponts.
     ========================================================== */
-    static _room3_TheSplitSquare(room) {
+    static _room3(room) {
         const spacing = 4;
-        const rectW = 4; // Réduit de 5 à 4
-        const rectH = 6; // Réduit de 8 à 6
+        const rectW = 3;
+        const rectH = 4;
         const gap = 2;   // Ponts courts maintenus
         const platforms = [], arenaPlatforms = [], extensionPlatforms = [];
 
@@ -142,16 +154,21 @@ export class Floor2 extends BaseFloor {
             }
         });
 
-        // Couloir d'entrée (7 unités pour garder un spawn éloigné)
-        for (let i = 1; i <= 7; i++) {
+        // Couloir d'entrée réduit
+        for (let i = 1; i <= 2; i++) {
             const pos = new Vector3(0, 0, -(gap + rectH + i) * spacing);
             room.addPlatform(pos);
             platforms.push(pos);
             extensionPlatforms.push(pos);
         }
 
-        const playerSpawnPos = new Vector3(0, 1, -(gap + rectH + 7) * spacing);
+        const playerSpawnPos = new Vector3(0, 1, -(gap + rectH + 2) * spacing);
         room.setSpawnPosition(playerSpawnPos);
+
+        // SORTIE : bout du rectangle Nord
+        const exitPos = new Vector3(0, 0, (gap + rectH) * spacing);
+        room.setExitPortal(exitPos);
+
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
 }

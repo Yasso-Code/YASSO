@@ -208,6 +208,9 @@ export class GameManager {
         this.gameStartTime = Date.now();
 
 
+        // Enregistre le snap caméra dans LevelManager
+        this.levelManager.setCameraSnap((spawnPos) => this._snapCameraToPlayer(spawnPos));
+
         // ✅ Charger le premier étage (spawnPlayer inclus)
         this.levelManager.loadFloor(1, this.player, this.ai);
     }
@@ -424,6 +427,19 @@ export class GameManager {
             // On passe directement l'instance 'this.ai' pour extraire les métriques brutes
             this.hudManager.updateDebug(this.ai);
         }
+    }
+
+    /**
+     * Téléporte instantanément la caméra sur le joueur (sans Lerp).
+     * Remet aussi l'offset à sa valeur par défaut pour éviter
+     * les décalages accumulés par _handleCameraZoom entre salles.
+     * Appelé par LevelManager.spawnPlayer() à chaque changement de salle.
+     */
+    _snapCameraToPlayer(spawnPos) {
+        if (!this.camera) return;
+        this.cameraOffset = new Vector3(0, 12, -12); // reset offset
+        this.camera.position.copyFrom(spawnPos.add(this.cameraOffset));
+        this.camera.setTarget(spawnPos);
     }
 
     _updateCamera() {

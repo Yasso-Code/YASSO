@@ -7,66 +7,54 @@ export class RoomPortals {
     // RoomPortals.js
 
     static createPortalVisual(scene, position, color = new Color3(0, 1, 1)) {
-        // 1. On crée une boîte invisible qui servira de ZONE DE COLLISION (Trigger)
-        const portalGroup = MeshBuilder.CreateBox("portalTrigger", { width: 3, height: 4, depth: 1 }, scene);
+        // Trigger de collision cylindrique — symétrique, aucune orientation requise
+        const portalGroup = MeshBuilder.CreateCylinder("portalTrigger", {
+            height: 4, diameter: 2.5, tessellation: 12
+        }, scene);
         portalGroup.position = position.clone();
-        portalGroup.isVisible = false; // Reste invisible mais détecte les collisions
+        portalGroup.position.y = 2;
+        portalGroup.isVisible = false;
 
-        // 2. L'Arche (Cadre extérieur)
-        const frame = MeshBuilder.CreateBox("portalFrame", { width: 3.2, height: 4.2, depth: 0.3 }, scene);
-        frame.position.y = 2.1;
-        frame.parent = portalGroup;
-        const frameMat = new StandardMaterial("frameMat", scene);
-        frameMat.emissiveColor = color;
-        frameMat.alpha = 0.9;
-        frame.material = frameMat;
+        // Anneau bas
+        const ringB = MeshBuilder.CreateTorus("portalRingB", { diameter: 2.8, thickness: 0.15, tessellation: 32 }, scene);
+        ringB.position.y = -1.8;
+        ringB.parent = portalGroup;
+        const ringBMat = new StandardMaterial("ringBMat", scene);
+        ringBMat.emissiveColor = color;
+        ringB.material = ringBMat;
 
-        // 3. Le Cœur (Surface énergétique)
-        const core = MeshBuilder.CreatePlane("portalCore", { width: 2.8, height: 3.8 }, scene);
-        core.position.y = 2.1;
-        core.position.z = -0.05;
-        core.parent = portalGroup;
-        const coreMat = new StandardMaterial("coreMat", scene);
-        coreMat.emissiveColor = color.scale(0.5);
-        coreMat.alpha = 0.5;
-        core.material = coreMat;
+        // Anneau haut
+        const ringT = ringB.clone("portalRingT");
+        ringT.position.y = 1.8;
+        ringT.parent = portalGroup;
 
-        // 4. Lumière et Particules
-        const light = new PointLight("portalLight", new Vector3(0, 2, 0), scene);
+        // Corps semi-transparent
+        const body = MeshBuilder.CreateCylinder("portalBody", {
+            height: 3.6, diameter: 2.5, tessellation: 12, sideOrientation: 2
+        }, scene);
+        body.parent = portalGroup;
+        const bodyMat = new StandardMaterial("portalBodyMat", scene);
+        bodyMat.emissiveColor = color.scale(0.4);
+        bodyMat.alpha = 0.35;
+        body.material = bodyMat;
+
+        // Lumière
+        const light = new PointLight("portalLight", new Vector3(0, 0, 0), scene);
         light.parent = portalGroup;
         light.diffuse = color;
         light.intensity = 1.5;
+        light.range = 8;
 
         this._addParticles(scene, portalGroup, color);
 
-        return portalGroup; // On retourne le mesh de collision
+        return portalGroup;
     }
 
 // Assurez-vous que les adaptateurs enregistrent bien le mesh dans le manager
-    static createRoomPortal(manager, position, nextRoomIndex, playerSpawnPos) {
+    static createRoomPortal(manager, position, nextRoomIndex) {
+        // Cylindre symétrique — aucune orientation, identique sur tous les axes
         const visual = this.createPortalVisual(manager.scene, position, new Color3(0, 1, 1));
-
-        if (playerSpawnPos) {
-            // ✅ CORRECTION: Orientation UNIQUE vers le spawn du joueur
-            // 1. Calcul de la direction sur le plan horizontal (X et Z uniquement)
-            const diffX = playerSpawnPos.x - position.x;
-            const diffZ = playerSpawnPos.z - position.z;
-
-            // 2. Calcul de l'angle ATAN2 pour une rotation Y pure
-            const angleY = Math.atan2(diffX, diffZ);
-
-            // 3. Application directe SANS aléatoire
-            // On force les rotations X et Z à 0 pour éviter l'inclinaison
-            visual.rotation = new Vector3(0, angleY, 0);
-
-            console.log(`🚪 Portal at (${position.x}, ${position.z}) oriented towards spawn (${playerSpawnPos.x}, ${playerSpawnPos.z}) - Angle: ${(angleY * 180 / Math.PI).toFixed(1)}°`);
-        } else {
-            // Fallback: orientation par défaut (face à la caméra initiale)
-            visual.rotation = new Vector3(0, 0, 0);
-            console.warn("⚠️ No player spawn position provided for portal orientation");
-        }
-
-        visual.metadata = { isLocked: false, nextRoomIndex: nextRoomIndex };
+        visual.metadata = { isLocked: false, nextRoomIndex };
         manager.portals.push(visual);
         manager.envNodes.push(visual);
     }
