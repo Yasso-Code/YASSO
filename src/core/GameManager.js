@@ -207,6 +207,18 @@ export class GameManager {
         this.ai.reset();
         this.gameStartTime = Date.now();
 
+        // ✅ Reset complet du joueur (santé, dash, état)
+        // player.reset() remet currentHealth à maxHealth et nettoie les états
+        if (typeof this.player.reset === 'function') {
+            this.player.reset();
+        } else {
+            // Fallback si reset() n'existe pas encore dans Player
+            this.player.currentHealth = this.player.maxHealth ?? 3;
+        }
+
+        // ✅ Nettoyer tous les ennemis du run précédent
+        this.entityManager.clearAll();
+
 
         // Enregistre le snap caméra dans LevelManager
         this.levelManager.setCameraSnap((spawnPos) => this._snapCameraToPlayer(spawnPos));
@@ -360,7 +372,10 @@ export class GameManager {
         // ─────────────────────────────────────────────────────────
         // CHECK CONDITIONS DE FIN
         // ─────────────────────────────────────────────────────────
-        if (this.player.currentHealth <= 0) {
+        // Guard : ignore les conditions de mort pendant 1s après le démarrage
+        // pour éviter le re-trigger immédiat si currentHealth n'est pas reset
+        const timeSinceStart = Date.now() - this.gameStartTime;
+        if (timeSinceStart > 1000 && this.player.currentHealth <= 0) {
             this._transitionToGameOver();
         }
 

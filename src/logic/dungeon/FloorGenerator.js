@@ -6,17 +6,59 @@ import { Floor4 } from "./floors/Floor4.js";
 import { Floor5 } from "./floors/Floor5.js";
 
 export class FloorGenerator {
+
+    static _roomOrders = {};
+
     /**
-     * Route la génération vers le module d'étage approprié
+     * Génère (ou récupère) l'ordre mélangé des salles pour un étage.
+     * Appelé automatiquement à la première salle de l'étage.
+     */
+    static getRoomOrder(floorNumber, totalRooms) {
+        const key = `floor_${floorNumber}`;
+        if (!this._roomOrders[key]) {
+
+            // Floors 3 & 4 : règle mini-boss
+            // - La salle 2 (index 1) est toujours jouée en position 0 ou 1 (jamais en dernier)
+            // - La dernière salle (position 2) est aléatoirement la salle 1 (index 0) ou salle 3 (index 2)
+            if (floorNumber === 3 || floorNumber === 4) {
+                const miniBossIndex = Math.random() < 0.5 ? 0 : 2; // salle 1 ou salle 3
+                const normalIndex   = miniBossIndex === 0 ? 2 : 0;  // l'autre
+                // Les deux premières positions : salle normale + salle 2, mélangées
+                const firstTwo = [normalIndex, 1].sort(() => Math.random() - 0.5);
+                this._roomOrders[key] = [...firstTwo, miniBossIndex];
+            } else {
+                // Ordre purement aléatoire pour les autres étages
+                const indices = Array.from({ length: totalRooms }, (_, i) => i);
+                for (let i = indices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [indices[i], indices[j]] = [indices[j], indices[i]];
+                }
+                this._roomOrders[key] = indices;
+            }
+        }
+        return this._roomOrders[key];
+    }
+
+    /**
+     * Réinitialise l'ordre d'un étage (appelé au début d'un nouveau run).
+     */
+    static resetFloorOrder(floorNumber) {
+        delete this._roomOrders[`floor_${floorNumber}`];
+    }
+
+    /**
+     * Réinitialise tous les ordres (nouveau run complet).
+     */
+    static resetAllOrders() {
+        this._roomOrders = {};
+    }
+
+    /**
+     * Route la génération vers le module d'étage approprié.
+     * roomIndex est la position dans le run (0, 1, 2…),
+     * l'ordre aléatoire mappe vers le vrai index de salle.
      */
     static generateRoom(floorNumber, roomIndex, roomType, aiData = null) {
-        const room = new Room({
-            floorNumber,
-            roomIndex,
-            roomType,
-            difficulty: this._calculateDifficulty(floorNumber, roomIndex)
-        });
-
         const floorModules = {
             1: Floor1,
             2: Floor2,
@@ -26,7 +68,24 @@ export class FloorGenerator {
         };
 
         const module = floorModules[floorNumber] || Floor1;
-        module.generate(room, roomIndex, aiData);
+
+        // Floor 5 (boss) = une seule salle, pas de mélange
+        const totalRooms = floorNumber === 5 ? 1 : 3;
+        const order = this.getRoomOrder(floorNumber, totalRooms);
+        const mappedIndex = order[roomIndex] ?? roomIndex;
+
+        const room = new Room({
+            floorNumber,
+            roomIndex,
+            roomType,
+            difficulty: this._calculateDifficulty(floorNumber, roomIndex)
+        });
+
+        module.generate(room, mappedIndex, aiData);
+
+        // Stocker le vrai index mappé pour que LevelManager puisse
+        // récupérer les bons types d'ennemis (salle réelle, pas position run)
+        room.mappedRoomIndex = mappedIndex;
 
         room.start();
         return room;

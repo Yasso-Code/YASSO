@@ -124,8 +124,13 @@ export class LevelManager {
      */
     loadFloor(floorNumber, player, aiData = null) {
         this.currentFloor = floorNumber;
-        this.currentRoomIndex = 0; // ✅ Force le retour à la salle 1
+        this.currentRoomIndex = 0;
         this.currentFloorConfig = FloorConfig.getFloor(floorNumber);
+
+        // ✅ Nouveau run : réinitialise tous les ordres de salles
+        if (floorNumber === 1) {
+            FloorGenerator.resetAllOrders();
+        }
 
         console.log(`--- CHARGEMENT ÉTAGE ${floorNumber}: ${this.currentFloorConfig.name} ---`);
 
@@ -192,8 +197,10 @@ export class LevelManager {
     }
 
     _spawnEnemiesForRoom(room, floorConfig) {
-        const enemyTypes = FloorGenerator.getEnemyTypesForRoom(this.currentFloor, this.currentRoomIndex);
-        // Appelle GameManager._onLevelLoaded qui gère le spawn et le debug
+        // Utilise le vrai index de salle (mappedRoomIndex) pour les types ennemis
+        // et non la position dans le run (currentRoomIndex)
+        const realRoomIndex = room.mappedRoomIndex ?? this.currentRoomIndex;
+        const enemyTypes = FloorGenerator.getEnemyTypesForRoom(this.currentFloor, realRoomIndex);
         if (this.onLevelLoaded) {
             this.onLevelLoaded(room.spawnPoints, enemyTypes);
         }
@@ -257,18 +264,24 @@ export class LevelManager {
         this.roomClearedTriggered = true;
 
         // ─────────────────────────────────────────────
-        // MINI-BOSS : Salle 3-3 (Floor 3, roomIndex 2)
+        // MINI-BOSS FLOOR 3 — dernière salle (roomIndex 2)
         // ─────────────────────────────────────────────
         if (this.currentFloor === 3 && this.currentRoomIndex === 2) {
-            console.log("⚠️ MINI-BOSS: SentinelleElite incoming!");
-
-            // Spawn du mini-boss
+            console.log("⚠️ MINI-BOSS F3: SentinelleElite incoming!");
             const bossPos = this.currentRoom.spawnPosition.clone();
             bossPos.y = 1;
-
             this.entityManager.spawnEnemy("SentinelleElite", bossPos);
+            return;
+        }
 
-            // On NE déclenche PAS la sortie
+        // ─────────────────────────────────────────────
+        // MINI-BOSS FLOOR 4 — dernière salle (roomIndex 2)
+        // ─────────────────────────────────────────────
+        if (this.currentFloor === 4 && this.currentRoomIndex === 2) {
+            console.log("⚠️ MINI-BOSS F4: Tank incoming!");
+            const bossPos = this.currentRoom.spawnPosition.clone();
+            bossPos.y = 1;
+            this.entityManager.spawnEnemy("Tank", bossPos);
             return;
         }
 

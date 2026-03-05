@@ -18,8 +18,8 @@ export class Player {
         this.currentDashAnim = null;
 
         // Système de vie
-        this.maxHealth = 30;
-        this.currentHealth = 30;
+        this.maxHealth = 48;
+        this.currentHealth = this.maxHealth;
         this.isInvincible = false;
         this.invincibilityDuration = 1500;
 

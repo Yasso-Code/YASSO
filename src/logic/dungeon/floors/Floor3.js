@@ -133,10 +133,10 @@ export class Floor3 extends BaseFloor {
         // --- NOUVEAU : COULOIR DE SPAWN ---
         // On crée un petit couloir qui mène à la Zone 1 (décalage vers la gauche sur X)
         for (let i = 1; i <= 4; i++) {
-            const spawnPos = new Vector3(-(2 + i) * spacing, 0, 0);
-            room.addPlatform(spawnPos);
-            platforms.push(spawnPos);
-            extensionPlatforms.push(spawnPos);
+            const corridorPos = new Vector3(-(2 + i) * spacing, 0, 0);
+            room.addPlatform(corridorPos);
+            platforms.push(corridorPos);
+            extensionPlatforms.push(corridorPos);
         }
 
         // 1. Création des 3 Zones (Clusters 5x5)
@@ -173,7 +173,4 @@ export class Floor3 extends BaseFloor {
 
         this.spawnBalancedEnemies(room, platforms, arenaPlatforms, extensionPlatforms, playerSpawnPos);
     }
-
-
-
 }
