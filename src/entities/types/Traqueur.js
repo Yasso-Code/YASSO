@@ -18,8 +18,10 @@ export class Traqueur extends Enemy {
         // ─────────────────────────────
         // SYSTÈME D'AGGRO
         // ─────────────────────────────
-        this.detectionRadius = 15;
-        this.loseAggroRadius = 22;
+        // detectionRadius > safeRadius (20u) pour que le Traqueur
+        // détecte le joueur dès qu'il entre dans la salle
+        this.detectionRadius = 25;
+        this.loseAggroRadius = 35;
         this.isAggro = false;
 
         // ~250ms à 60fps
