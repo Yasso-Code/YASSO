@@ -26,6 +26,7 @@ export class GameManager {
         this.STATES = {
             START: "START",
             PLAYING: "PLAYING",
+            PAUSED: "PAUSED",
             GAMEOVER: "GAMEOVER",
             GAMEWON: "GAMEWON"
         };
@@ -96,6 +97,7 @@ export class GameManager {
         this.startScreen = document.getElementById("start-screen");
         this.gameOverScreen = document.getElementById("game-over-screen");
         this.gameWonScreen = document.getElementById("game-won-screen");
+        this.pauseMenu = document.getElementById("pause-menu");
     }
 
     /**
@@ -127,6 +129,35 @@ export class GameManager {
                     this.restartGame();
                 }
             }
+        });
+
+        // --- PAUSE MENU CONTROLS ---
+        
+        // Bouton Reprendre
+        const resumeBtn = document.getElementById("resume-btn");
+        if (resumeBtn) {
+            resumeBtn.addEventListener("click", () => {
+                this.togglePause();
+            });
+        }
+
+        // Slider Volume
+        const volumeSlider = document.getElementById("volume-slider");
+        if (volumeSlider) {
+            volumeSlider.addEventListener("input", (e) => {
+                const vol = parseFloat(e.target.value);
+                this.audioManager.setMasterVolume(vol);
+            });
+        }
+
+        // Layout Radio Buttons (Pause Menu)
+        const pauseLayouts = document.querySelectorAll('input[name="pause-layout"]');
+        pauseLayouts.forEach(radio => {
+            radio.addEventListener("change", (e) => {
+                if (e.target.checked) {
+                    this.inputs.setLayout(e.target.value);
+                }
+            });
         });
     }
 
@@ -200,6 +231,7 @@ export class GameManager {
         this.startScreen.classList.remove("active");
         this.gameOverScreen.classList.remove("active");
         this.gameWonScreen.classList.remove("active");
+        this.pauseMenu.classList.remove("active");
 
         // Afficher le HUD
         this.hudManager.show();
@@ -237,6 +269,34 @@ export class GameManager {
     restartGame() {
         console.log("🔄 Redémarrage du jeu");
         this.startGame();
+    }
+
+    togglePause() {
+        if (this.gameState === this.STATES.PLAYING) {
+            console.log("⏸️ JEU EN PAUSE");
+            this.gameState = this.STATES.PAUSED;
+            
+            // Afficher le menu pause
+            this.pauseMenu.classList.add("active");
+            
+            // Masquer le HUD (optionnel)
+            // this.hudManager.hide();
+            
+            // Sync UI du menu pause avec l'état actuel
+            const currentLayout = this.inputs.layout;
+            const radio = document.querySelector(`input[name="pause-layout"][value="${currentLayout}"]`);
+            if (radio) radio.checked = true;
+
+        } else if (this.gameState === this.STATES.PAUSED) {
+            console.log("▶️ REPRISE DU JEU");
+            this.gameState = this.STATES.PLAYING;
+            
+            // Masquer le menu pause
+            this.pauseMenu.classList.remove("active");
+            
+            // Réafficher le HUD
+            // this.hudManager.show();
+        }
     }
 
     /**
@@ -328,14 +388,24 @@ export class GameManager {
      * @private
      */
     _update() {
-        // ✅ AJOUT: Update debug manager
+        // ✅ AJOUT: Update debug manager (toujours actif même en pause pour le monitoring ?)
         if (this.debugManager) {
             this.debugManager.update();
+        }
+        
+        // Gestion de la touche Pause
+        // On permet de mettre en pause même si on est en train de jouer,
+        // mais aussi de sortir de pause.
+        if (this.inputs.isPauseTriggered()) {
+            if (this.gameState === this.STATES.PLAYING || this.gameState === this.STATES.PAUSED) {
+                this.togglePause();
+            }
         }
 
         // Si pas en train de jouer, juste mettre à jour le HUD et sortir
         if (this.gameState !== this.STATES.PLAYING) {
-            this._updateHUD();
+            // Si en pause, on peut quand même update le HUD pour voir les changements de volume si besoin
+            // mais l'essentiel du jeu est figé
             return;
         }
 

@@ -42,6 +42,32 @@
             <p class="blink">Appuyez sur ENTRÉE pour commencer</p>
         </div>
 
+        <!-- ✅ MENU PAUSE -->
+        <div id="pause-menu" class="screen" style="border-color: #ffff00; box-shadow: 0 0 30px rgba(255, 255, 0, 0.3);">
+            <h1 style="color: #ffff00; text-shadow: 2px 2px 0px #ff0000;">PAUSE</h1>
+            
+            <div class="controls-hint" style="border-color: #ffff00; color: #ffff00;">
+                <p style="margin-bottom: 10px; font-weight: bold;">VOLUME MUSIQUE</p>
+                <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="1" style="width: 100%; accent-color: #ffff00;">
+            </div>
+
+            <div class="controls-hint" style="border-color: #ffff00; color: #ffff00;">
+                <p style="margin-bottom: 10px; font-weight: bold;">CONFIGURATION CLAVIER</p>
+                <div style="display: flex; justify-content: center; gap: 20px;">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <input type="radio" name="pause-layout" value="WASD" style="accent-color: #ffff00;"> 
+                        WASD
+                    </label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <input type="radio" name="pause-layout" value="ZQSD" style="accent-color: #ffff00;"> 
+                        ZQSD
+                    </label>
+                </div>
+            </div>
+
+            <button id="resume-btn" class="cyber-btn" style="border-color: #ffff00; color: #ffff00; margin-top: 20px;">REPRENDRE</button>
+        </div>
+
         <!-- Écran Game Over -->
         <div id="game-over-screen" class="screen">
             <h1 style="color: orangered;">CRITICAL ERROR</h1>

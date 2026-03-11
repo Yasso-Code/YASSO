@@ -32,6 +32,7 @@ export class AudioManager {
         this.currentMusicKey = null;
         this.isReady = false;
         this.isUnlocked = false;
+        this.masterVolume = 1.0;
     }
 
     /**
@@ -293,5 +294,18 @@ export class AudioManager {
         }
 
         this.currentMusicKey = null;
+    }
+
+    /**
+     * Définit le volume global
+     * @param {number} volume - De 0.0 à 1.0
+     */
+    setMasterVolume(volume) {
+        this.masterVolume = Math.max(0, Math.min(1, volume));
+        if (this.audioEngine) {
+            this.audioEngine.setGlobalVolume(this.masterVolume);
+        } else if (Engine.audioEngine) {
+            Engine.audioEngine.setGlobalVolume(this.masterVolume);
+        }
     }
 }

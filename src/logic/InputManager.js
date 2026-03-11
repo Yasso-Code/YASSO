@@ -12,10 +12,12 @@ export class InputManager {
             dash: false,
             zoomIn: false,
             zoomOut: false,
-            interact: false
+            interact: false,
+            pause: false
         };
         this.interactPressedOnce = false;
         this.dashPressedOnce = false;
+        this.pausePressedOnce = false;
         this.aiCollector = null;
         this.layout = "WASD"; // "WASD" ou "ZQSD"
         this._initListeners();
@@ -93,6 +95,13 @@ export class InputManager {
                 this.keys.interact = isPressed;
                 break;
                 
+            case "escape": // Pause
+                if (isPressed && !this.keys.pause) {
+                    this.pausePressedOnce = true;
+                }
+                this.keys.pause = isPressed;
+                break;
+                
             // --- Zoom ---
             case moveKeys.zoomIn: // La touche de zoom avant dépend du layout
                 this.keys.zoomIn = isPressed;
@@ -117,6 +126,14 @@ export class InputManager {
     isInteractTriggered() {
         if (this.interactPressedOnce) {
             this.interactPressedOnce = false;
+            return true;
+        }
+        return false;
+    }
+
+    isPauseTriggered() {
+        if (this.pausePressedOnce) {
+            this.pausePressedOnce = false;
             return true;
         }
         return false;
