@@ -15,9 +15,21 @@ export class InputManager {
             interact: false
         };
         this.interactPressedOnce = false;
-        this.dashPressedOnce = false; // ✅ AJOUT: Flag pour dash unique
+        this.dashPressedOnce = false;
         this.aiCollector = null;
+        this.layout = "WASD"; // "WASD" ou "ZQSD"
         this._initListeners();
+    }
+
+    /**
+     * Définit le layout du clavier (WASD ou ZQSD).
+     * @param {string} layout - "WASD" ou "ZQSD"
+     */
+    setLayout(layout) {
+        if (layout === "WASD" || layout === "ZQSD") {
+            this.layout = layout;
+            console.log(`⌨️ Keyboard layout set to: ${this.layout}`);
+        }
     }
 
     /**
@@ -40,46 +52,53 @@ export class InputManager {
     _handleKey(key, isPressed) {
         const ai = this.aiCollector;
 
+        // Définir les touches de mouvement en fonction du layout
+        const moveKeys = this.layout === "WASD" 
+            ? { forward: "w", left: "a", backward: "s", right: "d", zoomIn: "z" }
+            : { forward: "z", left: "q", backward: "s", right: "d", zoomIn: "w" };
+
         switch (key) {
-            // Mouvements ZQSD (ou WASD selon config)
-            case "w":
+            // --- Mouvements ---
+            case moveKeys.forward:
                 this.keys.forward = isPressed;
                 if (isPressed && ai) ai.recordMove("up");
                 break;
-            case "a":
+            case moveKeys.left:
                 this.keys.left = isPressed;
                 if (isPressed && ai) ai.recordMove("left");
                 break;
-            case "s":
+            case moveKeys.backward:
                 this.keys.backward = isPressed;
                 if (isPressed && ai) ai.recordMove("down");
                 break;
-            case "d":
+            case moveKeys.right:
                 this.keys.right = isPressed;
                 if (isPressed && ai) ai.recordMove("right");
                 break;
 
-            // Dash (Espace) - ✅ CORRIGÉ: Événement unique
-            case " ":
+            // --- Actions ---
+            case " ": // Dash
                 if (isPressed && !this.keys.dash) {
-                    // Premier appui uniquement
                     this.dashPressedOnce = true;
                     if (ai) ai.recordDash();
                 }
                 this.keys.dash = isPressed;
                 break;
 
-            // Zoom (Z / X pour correspondre à ton InputManager précédent)
-            case "z": this.keys.zoomIn = isPressed; break;
-            case "x": this.keys.zoomOut = isPressed; break;
-
-            // Interaction (E)
-            case "e":
+            case "e": // Interaction
                 if (isPressed && !this.keys.interact) {
                     this.interactPressedOnce = true;
                     if (ai) ai.recordBonusCollected();
                 }
                 this.keys.interact = isPressed;
+                break;
+                
+            // --- Zoom ---
+            case moveKeys.zoomIn: // La touche de zoom avant dépend du layout
+                this.keys.zoomIn = isPressed;
+                break;
+            case "x": // Zoom arrière reste 'x'
+                this.keys.zoomOut = isPressed;
                 break;
         }
     }
@@ -87,7 +106,6 @@ export class InputManager {
     isZoomInTriggered() { return this.keys.zoomIn; }
     isZoomOutTriggered() { return this.keys.zoomOut; }
 
-    // ✅ CORRIGÉ: Dash comme événement unique
     isDashTriggered() {
         if (this.dashPressedOnce) {
             this.dashPressedOnce = false;

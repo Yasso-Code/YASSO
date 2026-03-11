@@ -17,11 +17,27 @@
         <div id="start-screen" class="screen active">
             <h1>YASSO</h1>
             <p>Neural Network Infiltration</p>
+            
+            <!-- Choix du layout clavier -->
+            <div class="controls-hint" style="margin-bottom: 15px; border: none; background: transparent;">
+                <p style="margin-bottom: 10px; color: #00ffff;">CONFIGURATION CLAVIER :</p>
+                <div style="display: flex; justify-content: center; gap: 20px; font-family: 'Courier New', monospace;">
+                    <label style="cursor: pointer; color: #fff; display: flex; align-items: center; gap: 8px;">
+                        <input type="radio" name="layout" value="WASD" checked style="accent-color: #00ffff;"> 
+                        WASD (Qwerty)
+                    </label>
+                    <label style="cursor: pointer; color: #fff; display: flex; align-items: center; gap: 8px;">
+                        <input type="radio" name="layout" value="ZQSD" style="accent-color: #00ffff;"> 
+                        ZQSD (Azerty)
+                    </label>
+                </div>
+            </div>
+
             <div class="controls-hint">
-                <p>Déplacement : WASD</p>
+                <p>Déplacement : WASD / ZQSD</p>
                 <p>Combat : ESPACE (Dash à travers les ennemis)</p>
                 <p>Interaction : E (Activer les bonus)</p>
-                <p>Zoom : Q / E</p>
+                <p>Zoom : Q/E ou W/X</p>
             </div>
             <p class="blink">Appuyez sur ENTRÉE pour commencer</p>
         </div>

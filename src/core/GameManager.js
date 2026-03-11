@@ -190,6 +190,10 @@ export class GameManager {
     startGame() {
         console.log("🎮 Démarrage du jeu");
 
+        // ✅ AJOUT : Récupération du layout clavier choisi
+        const selectedLayout = document.querySelector('input[name="layout"]:checked').value;
+        this.inputs.setLayout(selectedLayout);
+
         this.gameState = this.STATES.PLAYING;
 
         // Masquer tous les écrans
