@@ -197,12 +197,10 @@ export class LevelManager {
     }
 
     _spawnEnemiesForRoom(room, floorConfig) {
-        // Utilise le vrai index de salle (mappedRoomIndex) pour les types ennemis
-        // et non la position dans le run (currentRoomIndex)
-        const realRoomIndex = room.mappedRoomIndex ?? this.currentRoomIndex;
-        const enemyTypes = FloorGenerator.getEnemyTypesForRoom(this.currentFloor, realRoomIndex);
+        // La palette est désormais calculée par chaque FloorX via runPosition.
+        // room.enemyList contient les types résolus — plus besoin de FloorGenerator.
         if (this.onLevelLoaded) {
-            this.onLevelLoaded(room.spawnPoints, enemyTypes);
+            this.onLevelLoaded(room.spawnPoints, room.enemyList ?? []);
         }
     }
 

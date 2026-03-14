@@ -2,262 +2,556 @@ import { Enemy } from "../Enemy.js";
 import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray } from "@babylonjs/core";
 
 /**
- * @class PulseDrone
- * Ennemi techno flottant qui pulse et déploie des mines énergétiques
+ * @class Pulse
+ * ─────────────────────────────────────────────────────────────
+ * MACHINE À ÉTATS (style Hadès)
+ * ─────────────────────────────────────────────────────────────
  */
 export class Pulse extends Enemy {
     constructor(scene, position) {
-        super(scene, "PulseDrone", position);
+        super(scene, "Pulse", position);
 
+        // Caractéristiques de base
         this.hp = 3;
-        this.speed = 0.07;
+        this.speed = 0.06;
 
-        // Distance idéale
-        this.safeDistance = 10;
+        // Zones de détection
+        this.detectionRange = 20;  // Distance pour entrer en KITE
+        this.loseRange = 28;       // Distance pour perdre le joueur (retour ROAM)
+        this.kiteMin = 7;           // Trop proche → reculer
+        this.kiteMax = 14;          // Trop loin → avancer
+        this.fleeRange = 5;         // Urgence absolue
+
+        // Machine à états
+        this.state = 'ROAM';
+        this.stateTimer = 0;
+        this.fleeDuration = 40;         // Frames de fuite
+        this.repositionDuration = 60;   // Frames de repositionnement
+
+        // Patrouille (ROAM)
+        this.roamTarget = null;
+        this.roamTimer = 0;
+        this.roamRadius = 8;            // Rayon de patrouille
+
+        // Strafe (KITE)
+        this.strafeDir = Math.random() < 0.5 ? 1 : -1;
+        this.strafeSwitchTimer = 0;
+        this.strafeSwitchInterval = 90; // Changer de direction toutes les ~1.5s
 
         // Mines
         this.mineCooldown = 0;
-        this.mineInterval = 150;
-        this.mines = [];
+        this.mineInterval = 150;        // ~2.5s à 60fps
         this.maxMines = 4;
+        this.mines = [];
 
-        // Anti-fusion
-        this.separationDistance = 2;
+        // Anti-fusion entre pulses
+        this.separationDistance = 3;
+        this.separationForce = 0.4;
 
-        // Animation interne
-        this.pulseTime = 0;
+        // Animation
+        this.pulsePhase = Math.random() * Math.PI * 2;
+        this.ringRotationSpeed = 0.04;
+        this.pulseAmplitude = 0.12;
     }
 
-    // ─────────────────────────────────────────────
-    // MESH : Sphère + anneau tournant
-    // ─────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────
+    // CRÉATION DU MESH
+    // ──────────────────────────────────────────────────────────
     _createMesh() {
-        const root = new MeshBuilder.CreateSphere("pulse_core", {
-            diameter: 1.2
+        // Cœur principal (sphère)
+        const core = MeshBuilder.CreateSphere("pulse_core", {
+            diameter: 1.2,
+            segments: 16
         }, this.scene);
 
+        // Anneau tournant autour
         const ring = MeshBuilder.CreateTorus("pulse_ring", {
-            diameter: 2,
-            thickness: 0.15
+            diameter: 2.2,
+            thickness: 0.18,
+            tessellation: 24
         }, this.scene);
 
-        ring.parent = root;
-        ring.rotation.x = Math.PI / 2;
+        ring.parent = core;
+        ring.rotation.x = Math.PI / 2; // Anneau horizontal
 
-        this.ring = ring;
-        return root;
+        // Stocker la référence
+        this._ring = ring;
+
+        return core;
     }
 
-    // ─────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────
     // MATÉRIAUX
-    // ─────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────
     _applyMaterial() {
+        // Matériau du cœur (cyan pulsant)
         const coreMat = new StandardMaterial("pulseCoreMat", this.scene);
-        coreMat.emissiveColor = new Color3(0, 0.7, 1); // Cyan
+        coreMat.emissiveColor = new Color3(0, 0.8, 1);
+        coreMat.diffuseColor = new Color3(0, 0.2, 0.3);
         this.mesh.material = coreMat;
 
-        const ringMat = new StandardMaterial("pulseRingMat", this.scene);
-        ringMat.emissiveColor = new Color3(0.5, 0, 1); // Violet
-        this.ring.material = ringMat;
+        // Matériau de l'anneau (violet)
+        if (this._ring) {
+            const ringMat = new StandardMaterial("pulseRingMat", this.scene);
+            ringMat.emissiveColor = new Color3(0.6, 0, 1);
+            ringMat.diffuseColor = new Color3(0.2, 0, 0.3);
+            this._ring.material = ringMat;
+        }
     }
 
-    // ─────────────────────────────────────────────
-    // RAYCAST SOL
-    // ─────────────────────────────────────────────
-    _getGroundHeight(targetPosition) {
-        const rayOrigin = new Vector3(targetPosition.x, 10, targetPosition.z);
-        const ray = new Ray(rayOrigin, new Vector3(0, -1, 0), 15);
+    // ──────────────────────────────────────────────────────────
+    // HAUTEUR DU SOL (raycast)
+    // ──────────────────────────────────────────────────────────
+    _getGroundHeight(position) {
+        const rayOrigin = new Vector3(position.x, 10, position.z);
+        const rayDirection = new Vector3(0, -1, 0);
+        const ray = new Ray(rayOrigin, rayDirection, 15);
 
         const hit = this.scene.pickWithRay(ray, (mesh) => mesh.name === "p");
-        return hit.hit ? hit.pickedPoint.y + 1.2 : null;
+
+        if (hit?.hit) {
+            return hit.pickedPoint.y + 0.4; // Légère élévation
+        }
+        return null;
     }
 
-    // ─────────────────────────────────────────────
-    // ANTI-FUSION
-    // ─────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────
+    // MOUVEMENT AVEC ADAPTATION AU SOL
+    // ──────────────────────────────────────────────────────────
+    _moveTo(targetPosition) {
+        const groundY = this._getGroundHeight(targetPosition);
+
+        if (groundY !== null) {
+            this.mesh.position.x = targetPosition.x;
+            this.mesh.position.z = targetPosition.z;
+            this.mesh.position.y = groundY + 1.0; // Flotte au-dessus du sol
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ANTI-FUSION ENTRE PULSES
+    // ──────────────────────────────────────────────────────────
     _getSeparationVector(entityManager) {
-        let sep = new Vector3(0, 0, 0);
+        const separation = Vector3.Zero();
+
+        if (!entityManager?.enemies) return separation;
 
         entityManager.enemies.forEach(other => {
-            if (other !== this && other.mesh) {
-                const dist = Vector3.Distance(this.mesh.position, other.mesh.position);
+            // Ignorer soi-même, les ennemis détruits ou sans mesh
+            if (other === this || !other.mesh || other.isDestroyed) return;
 
-                if (dist < this.separationDistance && dist > 0) {
-                    let diff = this.mesh.position.subtract(other.mesh.position);
-                    diff.normalize();
-                    sep.addInPlace(diff.scale(1 / dist));
-                }
+            const distance = Vector3.Distance(this.mesh.position, other.mesh.position);
+
+            if (distance < this.separationDistance && distance > 0.01) {
+                const direction = this.mesh.position.subtract(other.mesh.position).normalize();
+                const force = (1 / distance) * this.separationForce;
+                separation.addInPlace(direction.scale(force));
             }
         });
 
-        return sep;
+        return separation;
     }
 
-    // ─────────────────────────────────────────────
-    // IA PRINCIPALE (TACTIQUE AMÉLIORÉE)
-    // ─────────────────────────────────────────────
-    think(player, entityManager, aiCollector) {
-        if (this.isDestroyed || !player.mesh) return;
+    // ──────────────────────────────────────────────────────────
+    // CIBLE DE PATROUILLE ALÉATOIRE
+    // ──────────────────────────────────────────────────────────
+    _generateRoamTarget() {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = this.roamRadius * (0.5 + Math.random() * 0.5);
 
-        const diff = this.mesh.position.subtract(player.mesh.position);
-        const distance = diff.length();
-        const dirToPlayer = diff.normalize();
-        const dirAwayFromPlayer = dirToPlayer.scale(-1); // Direction opposée
+        return this.mesh.position.add(new Vector3(
+            Math.cos(angle) * distance,
+            0,
+            Math.sin(angle) * distance
+        ));
+    }
 
-        // Animation visuelle
-        this._animatePulse();
+    // ──────────────────────────────────────────────────────────
+    // CHANGEMENT D'ÉTAT
+    // ──────────────────────────────────────────────────────────
+    _setState(newState) {
+        if (this.state === newState) return;
 
-        // ═══════════════════════════════════════════════════════════════
-        // STRATÉGIE TACTIQUE
-        // ═══════════════════════════════════════════════════════════════
-
-        // 1️⃣ TROP PROCHE → FUITE IMMÉDIATE
-        if (distance < 6) {
-            const nextPos = this.mesh.position.add(dirToPlayer.scale(this.speed * 1.2)); // Fuite rapide
-            this._moveTo(nextPos);
+        // Nettoyage à la sortie d'un état
+        if (this.state === 'ROAM') {
+            this.roamTarget = null;
         }
 
-        // 2️⃣ DISTANCE IDÉALE POUR PIÉGER → APPROCHE TACTIQUE
-        else if (distance > this.safeDistance && distance < 18) {
-            // Si on a des mines disponibles, s'approcher pour piéger
-            if (this.mines.length < this.maxMines) {
-                // Approcher dans la direction du joueur
-                const nextPos = this.mesh.position.add(dirAwayFromPlayer.scale(this.speed * 0.8));
-                this._moveTo(nextPos);
+        this.state = newState;
+        this.stateTimer = 0;
+
+        // Initialisation à l'entrée d'un état
+        if (newState === 'REPOSITION') {
+            // Garde la même direction de strafe
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ANIMATION VISUELLE
+    // ──────────────────────────────────────────────────────────
+    _animatePulse() {
+        this.pulsePhase += 0.08;
+
+        // Pulsation du cœur
+        const scale = 1 + Math.sin(this.pulsePhase) * this.pulseAmplitude;
+        this.mesh.scaling.setAll(scale);
+
+        // Rotation de l'anneau
+        if (this._ring) {
+            this._ring.rotation.z += this.ringRotationSpeed;
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // LOGIQUE DE PATROUILLE (ROAM)
+    // ──────────────────────────────────────────────────────────
+    _updateRoam() {
+        this.roamTimer--;
+
+        // Nouvelle cible si nécessaire
+        if (this.roamTimer <= 0 || !this.roamTarget) {
+            this.roamTarget = this._generateRoamTarget();
+            this.roamTimer = 150 + Math.floor(Math.random() * 100); // ~2.5-4s
+        }
+
+        // Se déplacer vers la cible
+        if (this.roamTarget) {
+            const toTarget = this.roamTarget.subtract(this.mesh.position);
+            const distance = toTarget.length();
+
+            if (distance > 0.5) {
+                const direction = toTarget.normalize();
+                const move = direction.scale(this.speed * 0.5);
+                this._moveTo(this.mesh.position.add(move));
+            } else {
+                // Cible atteinte
+                this.roamTarget = null;
             }
-            // Sinon, maintenir distance
-            else {
-                // Mouvement latéral pour esquiver
-                const lateral = new Vector3(-dirToPlayer.z, 0, dirToPlayer.x); // Perpendiculaire
-                const nextPos = this.mesh.position.add(lateral.scale(this.speed));
-                this._moveTo(nextPos);
-            }
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // LOGIQUE DE KITE (état principal)
+    // ──────────────────────────────────────────────────────────
+    _updateKite(toPlayer, towardDir, awayDir, lateralDir, distance) {
+        // Changer de direction de strafe périodiquement
+        this.strafeSwitchTimer--;
+        if (this.strafeSwitchTimer <= 0) {
+            this.strafeDir *= -1;
+            this.strafeSwitchTimer = this.strafeSwitchInterval + Math.floor(Math.random() * 30);
         }
 
-        // 3️⃣ TROP LOIN → SE RAPPROCHER PROGRESSIVEMENT
-        else if (distance >= 18) {
-            // S'approcher lentement pour rester dans la zone de combat
-            const nextPos = this.mesh.position.add(dirAwayFromPlayer.scale(this.speed * 0.6));
-            this._moveTo(nextPos);
+        // Direction latérale (strafe)
+        const strafe = lateralDir.scale(this.strafeDir * this.speed);
+
+        let move;
+
+        if (distance < this.kiteMin) {
+            // Trop proche → reculer avec strafe léger
+            move = awayDir.scale(this.speed).add(strafe.scale(0.3));
+        }
+        else if (distance > this.kiteMax) {
+            // Trop loin → avancer vers le joueur avec strafe
+            move = towardDir.scale(this.speed * 0.5).add(strafe.scale(0.7));
+        }
+        else {
+            // Zone idéale → strafe pur
+            move = strafe;
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // ANTI-FUSION (éviter les autres Pulse)
-        // ═══════════════════════════════════════════════════════════════
-        const sep = this._getSeparationVector(entityManager);
-        if (sep.length() > 0.01) {
-            const nextPos = this.mesh.position.add(sep.scale(this.speed * 0.5));
-            this._moveTo(nextPos);
+        // Application du mouvement
+        if (move.length() > 0.001) {
+            this._moveTo(this.mesh.position.add(move));
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // DÉPLOIEMENT DE MINES
-        // ═══════════════════════════════════════════════════════════════
+        // Pose de mines en KITE
+        this._tryDropMine();
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // LOGIQUE DE FLEE (fuite d'urgence)
+    // ──────────────────────────────────────────────────────────
+    _updateFlee(awayDir) {
+        // Fuite rapide
+        const move = awayDir.scale(this.speed * 1.5);
+        this._moveTo(this.mesh.position.add(move));
+
+        // Pose une mine de panique plus souvent
+        if (this.mineCooldown <= 0 && this.mines.length < this.maxMines) {
+            this._dropMine();
+            this.mineCooldown = this.mineInterval * 0.6; // Cooldown réduit en fuite
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // LOGIQUE DE REPOSITION (latéral)
+    // ──────────────────────────────────────────────────────────
+    _updateReposition(lateralDir) {
+        const move = lateralDir.scale(this.strafeDir * this.speed * 0.8);
+        this._moveTo(this.mesh.position.add(move));
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // TENTATIVE DE POSE DE MINE
+    // ──────────────────────────────────────────────────────────
+    _tryDropMine() {
         this.mineCooldown--;
 
-        // Pondre une mine SI :
-        // - Le cooldown est terminé
-        // - On n'a pas atteint le max de mines
-        // - Le joueur est à une distance raisonnable (pas trop proche, pas trop loin)
-        if (this.mineCooldown <= 0 &&
-            this.mines.length < this.maxMines &&
-            distance > 7 &&
-            distance < 15) {
-
+        if (this.mineCooldown <= 0 && this.mines.length < this.maxMines) {
             this._dropMine();
             this.mineCooldown = this.mineInterval;
         }
-
-        this._updateMines(player);
     }
 
-    // ─────────────────────────────────────────────
-    // MOUVEMENT AVEC SUIVI DU SOL
-    // ─────────────────────────────────────────────
-    _moveTo(nextPos) {
-        const groundY = this._getGroundHeight(nextPos);
-        if (groundY !== null) {
-            this.mesh.position.x = nextPos.x;
-            this.mesh.position.z = nextPos.z;
-            this.mesh.position.y = groundY;
-        }
-    }
-
-    // ─────────────────────────────────────────────
-    // ANIMATION : Pulsation + rotation de l’anneau
-    // ─────────────────────────────────────────────
-    _animatePulse() {
-        this.pulseTime += 0.1;
-
-        const scale = 1 + Math.sin(this.pulseTime) * 0.1;
-        this.mesh.scaling = new Vector3(scale, scale, scale);
-
-        this.ring.rotation.z += 0.05;
-    }
-
-    // ─────────────────────────────────────────────
-    // MINES ÉNERGÉTIQUES
-    // ─────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────
+    // POSE D'UNE MINE
+    // ──────────────────────────────────────────────────────────
     _dropMine() {
-        const mine = MeshBuilder.CreateBox("pulse_mine", { size: 0.6 }, this.scene);
-        mine.position = this.mesh.position.clone();
-        mine.position.y -= 0.5;
+        // Position aléatoire autour du Pulse
+        const offset = new Vector3(
+            (Math.random() - 0.5) * 3,
+            0,
+            (Math.random() - 0.5) * 3
+        );
 
-        const mat = new StandardMaterial("mineMat", this.scene);
-        mat.emissiveColor = new Color3(1, 0, 1);
+        const minePosition = this.mesh.position.add(offset);
+        const groundY = this._getGroundHeight(minePosition);
+
+        if (groundY === null) return;
+
+        // Création de la mine
+        const mine = MeshBuilder.CreateBox("pulse_mine", {
+            size: 0.7,
+            faceColors: [
+                new Color3(1, 0.2, 1),
+                new Color3(1, 0.2, 1),
+                new Color3(1, 0.2, 1),
+                new Color3(1, 0.2, 1),
+                new Color3(1, 0.2, 1),
+                new Color3(1, 0.2, 1)
+            ]
+        }, this.scene);
+
+        mine.position.x = minePosition.x;
+        mine.position.y = groundY;
+        mine.position.z = minePosition.z;
+
+        // Matériau émissif
+        const mat = new StandardMaterial("mineMat_" + Date.now(), this.scene);
+        mat.emissiveColor = new Color3(1, 0.1, 1);
+        mat.diffuseColor = new Color3(0.5, 0, 0.5);
         mine.material = mat;
 
-        // 🔥 IMPORTANT : on force rotation à un Vector3
-        mine.rotation = new Vector3(0, 0, 0);
-
-        mine._pulse = 0;
-        mine._rotation = 0;
-        mine._lifetime = 0;
+        // Métadonnées pour l'animation
+        mine.metadata = {
+            pulsePhase: Math.random() * Math.PI * 2,
+            rotationY: 0,
+            lifetime: 0,
+            maxLifetime: 480, // 8s à 60fps
+            isDying: false,
+            fadeProgress: 0,
+            fadeDuration: 180, // 3s de fadeout
+            observer: null
+        };
 
         this.mines.push(mine);
     }
 
+    // ──────────────────────────────────────────────────────────
+    // MISE À JOUR D'UNE MINE
+    // ──────────────────────────────────────────────────────────
+    _updateMine(mine, player) {
+        if (!mine || mine.isDisposed()) return;
 
+        const meta = mine.metadata;
 
+        // Animation
+        meta.pulsePhase += 0.12;
+        meta.rotationY += 0.04;
+        meta.lifetime++;
+
+        // Pulsation visuelle
+        const pulseScale = 1 + Math.sin(meta.pulsePhase) * 0.2;
+        mine.scaling.setAll(pulseScale);
+
+        // Rotation lente
+        mine.rotation.y = meta.rotationY;
+
+        // Gestion du fadeout
+        if (meta.isDying) {
+            meta.fadeProgress++;
+            const alpha = 1 - (meta.fadeProgress / meta.fadeDuration);
+
+            if (mine.material) {
+                mine.material.alpha = Math.max(0, alpha);
+            }
+
+            if (meta.fadeProgress >= meta.fadeDuration) {
+                // Nettoyer l'observer si existe
+                if (meta.observer) {
+                    this.scene.onBeforeRenderObservable.remove(meta.observer);
+                    meta.observer = null;
+                }
+                mine.dispose();
+                return;
+            }
+        }
+
+        // Collision avec le joueur (seulement si la mine n'est pas en train de disparaître)
+        if (!meta.isDying && player?.mesh && player.mesh.intersectsMesh(mine, false)) {
+            player.takeDamage();
+
+            if (meta.observer) {
+                this.scene.onBeforeRenderObservable.remove(meta.observer);
+                meta.observer = null;
+            }
+
+            mine.dispose();
+            return;
+        }
+
+        // Fin de vie naturelle → entame le fadeout
+        if (meta.lifetime >= meta.maxLifetime && !meta.isDying) {
+            meta.isDying = true;
+            meta.fadeProgress = 0;
+
+            if (mine.material) {
+                mine.material.needDepthPrePass = true;
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // MISE À JOUR DE TOUTES LES MINES
+    // ──────────────────────────────────────────────────────────
     _updateMines(player) {
         for (let i = this.mines.length - 1; i >= 0; i--) {
             const mine = this.mines[i];
-            if (!mine || mine.isDisposed()) continue;
 
-            mine._pulse += 0.15;
-            mine._rotation += 0.05;
-            mine._lifetime++;
-
-            // Pulsation visuelle
-            const scale = 1 + Math.sin(mine._pulse) * 0.15;
-            mine.scaling = new Vector3(scale, scale, scale);
-
-            // ✅ CORRECTION: Rotation lente - TOUJOURS créer un nouveau Vector3
-            mine.rotation = new Vector3(0, mine._rotation, 0);
-
-            // Collision avec le joueur
-            if (player.mesh && player.mesh.intersectsMesh(mine, false)) {
-                player.takeDamage();
-                mine.dispose();
+            if (!mine || mine.isDisposed()) {
                 this.mines.splice(i, 1);
                 continue;
             }
 
-            // Auto-destruction après 6 secondes
-            if (mine._lifetime > 360) {
-                mine.dispose();
+            this._updateMine(mine, player);
+
+            if (mine.isDisposed()) {
                 this.mines.splice(i, 1);
             }
         }
     }
 
+    // ──────────────────────────────────────────────────────────
+    // IA PRINCIPALE
+    // ──────────────────────────────────────────────────────────
+    think(player, entityManager, aiCollector) {
+        if (this.isDestroyed || !player?.mesh) return;
 
-    // ─────────────────────────────────────────────
-    // CLEANUP
-    // ─────────────────────────────────────────────
+        // Vecteurs de base
+        const toPlayer = player.mesh.position.subtract(this.mesh.position);
+        const distance = toPlayer.length();
+
+        // Éviter les divisions par zéro
+        if (distance < 0.001) return;
+
+        const towardDir = toPlayer.normalize();
+        const awayDir = towardDir.scale(-1);
+        const lateralDir = new Vector3(-towardDir.z, 0, towardDir.x).normalize();
+
+        // Animation continue
+        this._animatePulse();
+        this.stateTimer++;
+
+        // ─── TRANSITIONS D'ÉTAT ────────────────────────────────
+        switch (this.state) {
+            case 'ROAM':
+                if (distance < this.detectionRange) {
+                    this._setState('KITE');
+                }
+                break;
+
+            case 'KITE':
+                if (distance < this.fleeRange) {
+                    this._setState('FLEE');
+                } else if (distance > this.loseRange) {
+                    this._setState('ROAM');
+                }
+                break;
+
+            case 'FLEE':
+                if (this.stateTimer >= this.fleeDuration) {
+                    this._setState('REPOSITION');
+                }
+                break;
+
+            case 'REPOSITION':
+                if (this.stateTimer >= this.repositionDuration) {
+                    this._setState('KITE');
+                } else if (distance < this.fleeRange) {
+                    this._setState('FLEE'); // Re-fuite si toujours trop proche
+                }
+                break;
+        }
+
+        // ─── EXÉCUTION DE L'ÉTAT ───────────────────────────────
+        switch (this.state) {
+            case 'ROAM':
+                this._updateRoam();
+                break;
+
+            case 'KITE':
+                this._updateKite(toPlayer, towardDir, awayDir, lateralDir, distance);
+                break;
+
+            case 'FLEE':
+                this._updateFlee(awayDir);
+                break;
+
+            case 'REPOSITION':
+                this._updateReposition(lateralDir);
+                break;
+        }
+
+        // Anti-fusion entre pulses
+        const separation = this._getSeparationVector(entityManager);
+        if (separation.length() > 0.01) {
+            const currentPos = this.mesh.position;
+            this._moveTo(currentPos.add(separation));
+        }
+
+        // Mise à jour des mines
+        this._updateMines(player);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // NETTOYAGE À LA MORT
+    // ──────────────────────────────────────────────────────────
     dispose() {
-        this.mines.forEach(m => !m.isDisposed() && m.dispose());
+        if (this.isDestroyed) return;
+
+        // Rendre les mines orphelines (elles continuent de vivre)
+        this.mines.forEach(mine => {
+            if (mine.isDisposed() || !mine.metadata) return;
+
+            // Déclencher le fadeout
+            mine.metadata.isDying = true;
+            mine.metadata.fadeProgress = 0;
+
+            if (mine.material) {
+                mine.material.needDepthPrePass = true;
+            }
+
+            // Attacher un observer pour continuer la mise à jour sans le Pulse
+            const observer = this.scene.onBeforeRenderObservable.add(() => {
+                this._updateMine(mine, null); // null = pas de dégâts joueur
+            });
+
+            mine.metadata.observer = observer;
+        });
+
+        // Vider le tableau sans disposer (les mines sont orphelines)
         this.mines = [];
+
         super.dispose();
     }
 }
