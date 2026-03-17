@@ -2,28 +2,52 @@ import { Vector3 } from "@babylonjs/core";
 import { BaseFloor } from "./BaseFloor.js";
 
 /**
- * 🟡 ÉTAGE 4: NOYAU — SURCHARGE
+ * 🟡 ÉTAGE 4 — NOYAU
+ * Types disponibles : Tous sauf Pulse (trop technique)
+ * Philosophie : combat rapproché, pression constante
  */
 export class Floor4 extends BaseFloor {
 
-    static generate(room, roomIndex, aiData) {
+    static ENEMY_PALETTE = {
+        1: { types: ['Traqueur', 'Drone', 'Sentinelle'], ratio: 0.5 },
+        2: { types: ['Traqueur', 'Drone', 'Sentinelle', 'Parasite'], ratio: 0.6 },
+        3: { types: ['Traqueur', 'Drone', 'Sentinelle', 'Parasite', 'Tank'], ratio: 0.7 },
+    };
+
+    static generate(room, roomIndex, runPosition, aiData) {
         switch (roomIndex) {
-            case 0: return this._room1(room);
-            case 1: return this._room2(room);
-            case 2: return this._room3(room);
+            case 0: return this._room1(room, runPosition, aiData);
+            case 1: return this._room2(room, runPosition, aiData);
+            case 2: return this._room3(room, runPosition, aiData);
         }
     }
 
-    // ─────────────────────────────
-    // ROOM 1 — SPIRALE OUVERTE
-    // Un couloir qui s'enroule en spirale vers un centre ouvert.
-    // Spawn à l'entrée extérieure → arène centrale.
-    // Le joueur est forcé de longer le couloir avant d'atteindre le cœur.
-    // ─────────────────────────────
-    static _room1(room) {
-        const sp = 4;
-        const platforms = [], arena = [], ext = [];
+    static _getTypes(runPosition) {
+        return (this.ENEMY_PALETTE[runPosition] ?? this.ENEMY_PALETTE[3]).types;
+    }
 
+    static _getRatio(runPosition) {
+        return (this.ENEMY_PALETTE[runPosition] ?? this.ENEMY_PALETTE[3]).ratio;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Garanties F4 : minimum de Tank en fin de floor
+    // ─────────────────────────────────────────────────────────
+    static _applyF4Guarantees(enemyList, runPosition) {
+        if (runPosition === 3) {
+            enemyList = this.applyTypeMinimum(enemyList, 'Tank', 1, 2);
+        }
+        return enemyList;
+    }
+
+    /* ==========================================================
+       SALLE 1 — SPIRALE OUVERTE
+       Un couloir qui s'enroule en spirale vers un centre ouvert.
+       Spawn à l'entrée extérieure → arène centrale.
+    ========================================================== */
+    static _room1(room, runPosition, aiData) {
+        const sp = 4;
+        const arenaPlatforms = [], extPlatforms = [];
         const added = new Set();
         const key = (x, z) => `${x},${z}`;
 
@@ -33,8 +57,7 @@ export class Floor4 extends BaseFloor {
             added.add(k);
             const pos = new Vector3(x * sp, 0, z * sp);
             room.addPlatform(pos);
-            platforms.push(pos);
-            (isArena ? arena : ext).push(pos);
+            (isArena ? arenaPlatforms : extPlatforms).push(pos);
         };
 
         // ── BRAS 1 : entrée — vers le bas (Sud), axe X=−7, Z de −7 à 0
@@ -69,18 +92,19 @@ export class Floor4 extends BaseFloor {
 
         const spawnPos = new Vector3(-6 * sp, 1, -7 * sp);
         room.setSpawnPosition(spawnPos);
-        this.spawnBalancedEnemies(room, platforms, arena, ext, spawnPos);
+        room.setExitPortal(new Vector3(0, 0, 3 * sp));
+
+        this._spawnEnemies(room, runPosition, aiData, arenaPlatforms, extPlatforms, spawnPos);
     }
 
-    // ─────────────────────────────
-    // ROOM 2 — GRILLE 3×3
-    // 9 zones carrées (3×3 tiles chacune) disposées en grille,
-    // reliées par des ponts étroits (1 tile de large).
-    // Spawn zone [0,0] (coin SW) → arènes centrales → portail zone [2,2] (coin NE).
-    // ─────────────────────────────
-    static _room2(room) {
+    /* ==========================================================
+       SALLE 2 — GRILLE 3×3
+       9 zones carrées (3×3 tiles chacune) disposées en grille,
+       reliées par des ponts étroits (1 tile de large).
+    ========================================================== */
+    static _room2(room, runPosition, aiData) {
         const sp = 4;
-        const platforms = [], arena = [], ext = [];
+        const arenaPlatforms = [], extPlatforms = [];
         const added = new Set();
         const key = (x, z) => `${x},${z}`;
 
@@ -90,8 +114,7 @@ export class Floor4 extends BaseFloor {
             added.add(k);
             const pos = new Vector3(x * sp, 0, z * sp);
             room.addPlatform(pos);
-            platforms.push(pos);
-            (isArena ? arena : ext).push(pos);
+            (isArena ? arenaPlatforms : extPlatforms).push(pos);
         };
 
         const cellSize = 3;  // tiles par zone
@@ -137,33 +160,34 @@ export class Floor4 extends BaseFloor {
 
         const spawnPos = new Vector3(1 * sp, 1, -3 * sp);
         room.setSpawnPosition(spawnPos);
-        this.spawnBalancedEnemies(room, platforms, arena, ext, spawnPos);
+        room.setExitPortal(new Vector3(11 * sp, 0, 11 * sp));
+
+        this._spawnEnemies(room, runPosition, aiData, arenaPlatforms, extPlatforms, spawnPos);
     }
 
-    // ─────────────────────────────
-    // ROOM 3 — THE CORE CELL (Mini-Boss Octogone Compact)
-    // Structure : Octogone réduit pour un combat intense et rapide.
-    // ─────────────────────────────
-    static _room3(room) {
+    /* ==========================================================
+       SALLE 3 — THE CORE CELL (Mini-Boss Octogone Compact)
+       Structure : Octogone réduit pour un combat intense et rapide.
+    ========================================================== */
+    static _room3(room, runPosition, aiData) {
         const sp = 4;
-        const platforms = [], arena = [], ext = [];
+        const arenaPlatforms = [], extPlatforms = [];
         const added = new Set();
+
         const addP = (x, z, isArena = false) => {
             const k = `${x},${z}`;
             if (added.has(k)) return;
             added.add(k);
             const pos = new Vector3(x * sp, 0, z * sp);
             room.addPlatform(pos);
-            platforms.push(pos);
-            (isArena ? arena : ext).push(pos);
+            (isArena ? arenaPlatforms : extPlatforms).push(pos);
         };
 
-        // 1. Couloir d'entrée réduit
+        // Couloir d'entrée réduit
         for (let z = -8; z <= -5; z++)
             for (let x = -1; x <= 1; x++) addP(x, z, false);
 
-        // 2. Arène Octogonale Compacte (Rayon 5)
-        // L'équation Math.abs(x) + Math.abs(z) <= 7 crée un octogone parfait de 11x11 max
+        // Arène Octogonale Compacte (Rayon 5)
         for (let x = -5; x <= 5; x++) {
             for (let z = -5; z <= 5; z++) {
                 if (Math.abs(x) + Math.abs(z) <= 7) {
@@ -172,20 +196,56 @@ export class Floor4 extends BaseFloor {
             }
         }
 
-        // 3. Piliers de Protection rapprochés (1x1 pour ne pas encombrer)
+        // Piliers de Protection rapprochés
         const pillars = [[-2, -2], [2, -2], [-2, 2], [2, 2]];
         pillars.forEach(([px, pz]) => {
             addP(px, pz, true);
         });
 
-        // SPAWN : Entrée du couloir
         const spawnPos = new Vector3(0, 1, -8 * sp);
         room.setSpawnPosition(spawnPos);
+        room.setExitPortal(new Vector3(0, 0, 0));
 
-        // SORTIE : Centre de l'octogone
-        const exitPos = new Vector3(0, 0, 0);
-        room.setExitPortal(exitPos);
+        this._spawnEnemies(room, runPosition, aiData, arenaPlatforms, extPlatforms, spawnPos);
+    }
 
-        this.spawnBalancedEnemies(room, platforms, arena, ext, spawnPos);
+    /* ==========================================================
+       Méthode commune de spawn pour F4
+       Répartition : 70% arènes / 30% extensions
+    ========================================================== */
+    static _spawnEnemies(room, runPosition, aiData, arenaPlatforms, extPlatforms, spawnPos) {
+        const totalBudget = this.calculateBudget(room.floorNumber, runPosition, room.platforms.length, aiData);
+        const types = this._getTypes(runPosition);
+        const ratio = this._getRatio(runPosition);
+        const cfg = this.FLOOR_CONFIG[room.floorNumber];
+
+        // Répartition 70% arènes / 30% extensions
+        const arenaBudget = Math.round(totalBudget * 0.7);
+        const extBudget = totalBudget - arenaBudget;
+
+        const arenaValid = this.filterByDistance(arenaPlatforms, spawnPos, room.floorNumber);
+        const extValid = this.filterByDistance(extPlatforms, spawnPos, room.floorNumber);
+
+        const arenaList = this.buildEnemyList(arenaBudget, types, ratio || cfg.maxExpensiveRatio);
+        const extList = this.buildEnemyList(extBudget, types, ratio || cfg.maxExpensiveRatio);
+
+        const allList = [...arenaList, ...extList];
+        room.enemyList = this._applyF4Guarantees(allList, runPosition);
+
+        const shuffledArena = [...arenaValid].sort(() => Math.random() - 0.5);
+        const shuffledExt = [...extValid].sort(() => Math.random() - 0.5);
+
+        arenaList.forEach((_, i) => {
+            if (shuffledArena[i]) room.addSpawnPoint(new Vector3(shuffledArena[i].x, 1, shuffledArena[i].z));
+        });
+        extList.forEach((_, i) => {
+            if (shuffledExt[i]) room.addSpawnPoint(new Vector3(shuffledExt[i].x, 1, shuffledExt[i].z));
+        });
+
+        // Stats
+        const counts = {};
+        room.enemyList.forEach(e => counts[e] = (counts[e] || 0) + 1);
+        const summary = Object.entries(counts).map(([k, v]) => `${v}${k[0]}`).join('+');
+        console.log(`🎮 F4-R${room.roomIndex+1} pos=${runPosition} budget=${totalBudget}pts → ${room.enemyList.length} (${summary})`);
     }
 }

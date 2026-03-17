@@ -35,7 +35,7 @@ export class BaseFloor {
     // Avant application de sizeMult et budgetMult (IA Edition)
     // ─────────────────────────────────────────────────────────
     static BASE_BUDGETS = {
-        1: { 1: 3,  2: 8,  3: 10 },
+        1: { 1: 3,  2: 10, 3: 13 },
         2: { 1: 8,  2: 12, 3: 16 },
         3: { 1: 12, 2: 17, 3: 22 },
         4: { 1: 16, 2: 22, 3: 28 },
@@ -68,39 +68,59 @@ export class BaseFloor {
      * @param {Object|null} aiData      - { budgetMult } fourni par l'IA Edition
      * @returns {number} Budget en points
      */
-    static calculateBudget(floorNumber, roomPosition, platformCount, aiData = null) {
+    static calculateBudget(
+        floorNumber,
+        roomPosition,
+        platformCount,
+        aiData = null,
+        runRoomSizes = null // tableau des tailles des salles de la run
+    ) {
+
         const floorBudgets = this.BASE_BUDGETS[floorNumber] || this.BASE_BUDGETS[1];
         const baseBudget   = floorBudgets[roomPosition] || floorBudgets[1];
 
         // ─────────────────────────────────────────
-        // SIZE MULT CORRIGÉ
-        // Influence modérée de la taille de salle
+        // SIZE MULT STANDARD
         // ─────────────────────────────────────────
+
         const sizeRatio = platformCount / this.REF_PLATFORM_COUNT;
 
-        // impact taille réduit (50%)
         const sizeMultRaw = 1 + ((sizeRatio - 1) * 0.5);
 
-        // clamp pour éviter les écarts trop grands
         let sizeMult = Math.min(1.25, Math.max(0.9, sizeMultRaw));
 
         // ─────────────────────────────────────────
-        // RUN: réduction progressive si grande salle en 2ème position
+        // RUN BALANCING (comparaison avec les autres salles)
         // ─────────────────────────────────────────
-        if (roomPosition === 1) {
-            const LARGE_ROOM_BASE = this.REF_PLATFORM_COUNT * 1.2; // seuil de "grande salle"
-            if (platformCount > LARGE_ROOM_BASE) {
-                // nerf proportionnel entre 0 et max 20% réduction
-                const excessRatio = (platformCount - LARGE_ROOM_BASE) / LARGE_ROOM_BASE;
-                const nerfMult = 1 - Math.min(0.3, excessRatio * 0.5);
-                console.log(`⚡ Nerf progressif appliqué : mult=${nerfMult.toFixed(2)}`);
+
+        if (roomPosition === 1 && runRoomSizes && runRoomSizes.length > 1) {
+
+            const avgSize =
+                runRoomSizes.reduce((a, b) => a + b, 0) / runRoomSizes.length;
+
+            const relativeSize = platformCount / avgSize;
+
+            if (relativeSize > 1.15) {
+
+                // nerf progressif basé sur l'écart
+                const excess = relativeSize - 1.15;
+
+                const nerfMult = 1 - Math.min(0.25, excess * 0.5);
+
+                console.log(
+                    `⚡ RUN BALANCE: grande salle en R2 | rel=${relativeSize.toFixed(
+                        2
+                    )} nerf=${nerfMult.toFixed(2)}`
+                );
+
                 sizeMult *= nerfMult;
             }
         }
 
         // ─────────────────────────────────────────
-        // IA Edition (désactivé pour l'instant)
+        // IA Edition
         // ─────────────────────────────────────────
+
         const budgetMult = aiData?.budgetMult ?? 1;
 
         return Math.round(baseBudget * sizeMult * budgetMult);
@@ -175,11 +195,14 @@ export class BaseFloor {
             aiData
         );
 
-        const enemyList = this.buildEnemyList(
+        let enemyList = this.buildEnemyList(
             budget,
             enemyTypes,
             cfg.maxExpensiveRatio
         );
+
+        // cap Sentinelles early game
+        enemyList = this.applyEarlySentinelCap(enemyList, roomPosition);
 
         // Shuffle spawn points
         const shuffled = [...validSpawnPoints].sort(() => Math.random() - 0.5);
@@ -237,52 +260,70 @@ export class BaseFloor {
         }
     }
 
-    /**
-     * ✅ AJOUT: Méthode helper pour Floor3 qui manquait
-     * Combine les plateformes valides, récupère les types d'ennemis et lance le spawn par budget.
-     */
-    static spawnBalancedEnemies(room, allPlatforms, arenaPlatforms, extensionPlatforms, playerSpawnPos) {
-        // 1. On filtre les points valides (loin du spawn joueur)
-        // On utilise allPlatforms pour maximiser les possibilités de spawn
-        const validPoints = this.filterByDistance(allPlatforms, playerSpawnPos, room.floorNumber);
+    static applyEarlySentinelCap(enemyList, roomPosition) {
 
-        // 2. On récupère les types d'ennemis pour cette salle
-        // On utilise mappedRoomIndex (vrai type de salle) si dispo, sinon l'index de run
-        const roomIdx = (typeof room.mappedRoomIndex !== 'undefined') ? room.mappedRoomIndex : room.roomIndex;
-        const enemyTypes = this.getEnemyTypesForRoom(room.floorNumber, roomIdx);
+        // caps max par position de run
+        // pos1 → 1S max / pos2 → 2S max / pos3 → 4S max
+        const caps = [1, 2, 4];
 
-        // 3. On lance la génération par budget
-        // room.roomIndex + 1 car spawnFromBudget attend 1, 2, 3...
-        this.spawnFromBudget(room, validPoints, enemyTypes, room.roomIndex + 1);
+        if (roomPosition <= 3) {
+            const cap = caps[roomPosition - 1];
+            let sentinels = enemyList.filter(e => e === "Sentinelle").length;
+            if (sentinels > cap) {
+                console.log(`⚡ Sentinel cap R${roomPosition} → ${cap}`);
+                let removed = sentinels - cap;
+                for (let i = enemyList.length - 1; i >= 0 && removed > 0; i--) {
+                    if (enemyList[i] === "Sentinelle") {
+                        enemyList[i] = "Traqueur";
+                        removed--;
+                    }
+                }
+            }
+        }
+
+        return enemyList;
     }
 
     /**
-     * ✅ AJOUT: Récupération des types d'ennemis (dupliqué de FloorGenerator pour éviter les cycles)
+     * Garantit un nombre minimum de Sentinelles dans la liste.
+     * Convertit des Traqueurs en Sentinelles si nécessaire.
+     * À appeler APRÈS applyEarlySentinelCap.
+     *
+     * @param {string[]} enemyList
+     * @param {number} minCount  - Minimum de Sentinelles souhaité
+     * @param {number} maxCount  - Ne pas dépasser ce cap
      */
-    static getEnemyTypesForRoom(floorNumber, roomIndex) {
-        const progression = {
-            1: [
-                ["Traqueur"],
-                ["Traqueur", "Sentinelle"],
-                ["Traqueur", "Sentinelle"]
-            ],
-            2: [
-                ["Traqueur", "Drone"],
-                ["Sentinelle", "Pulse"],
-                ["Traqueur", "Sentinelle", "Pulse"]
-            ],
-            3: [
-                ["Sentinelle", "Pulse"],
-                ["Traqueur", "Pulse", "Drone"],
-                ["Traqueur", "Sentinelle", "Drone"]
-            ],
-            4: [
-                ["Sentinelle", "Pulse", "Drone"],
-                ["Traqueur", "Sentinelle", "Pulse", "Tank"],
-                ["Traqueur", "Sentinelle", "Pulse", "Parasite"]
-            ],
-            5: [["NEXUS"]]
-        };
-        return progression[floorNumber]?.[roomIndex] || ["Traqueur"];
+    static applySentinelMinimum(enemyList, minCount, maxCount) {
+        return this.applyTypeMinimum(enemyList, 'Sentinelle', minCount, maxCount);
+    }
+
+    /**
+     * Garantit un minimum d'un type donné dans la liste.
+     * Convertit des Traqueurs en ce type si nécessaire.
+     * À appeler APRÈS applyEarlySentinelCap.
+     *
+     * @param {string[]} enemyList
+     * @param {string}   type      - Type à garantir (ex: 'Sentinelle', 'Pulse')
+     * @param {number}   minCount  - Minimum souhaité
+     * @param {number}   maxCount  - Ne pas dépasser ce cap
+     */
+    static applyTypeMinimum(enemyList, type, minCount, maxCount) {
+        let current = enemyList.filter(e => e === type).length;
+        const target = Math.min(minCount, maxCount);
+
+        if (current < target) {
+            const needed = target - current;
+            let added = 0;
+            for (let i = enemyList.length - 1; i >= 0 && added < needed; i--) {
+                if (enemyList[i] === "Traqueur") {
+                    enemyList[i] = type;
+                    added++;
+                }
+            }
+            for (let i = added; i < needed; i++) enemyList.push(type);
+            console.log(`⚡ ${type} min → ${target} (${added} convertis)`);
+        }
+
+        return enemyList;
     }
 }

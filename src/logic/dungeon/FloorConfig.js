@@ -12,7 +12,6 @@ export class FloorConfig {
             color: new Color3(0/255, 150/255, 95/255),
             rooms: 3,
             roomType: "simple",
-            enemyType: "Traqueur",
             philosophy: "CALIBRATION",
             description: "Nœud de calcul primaire - Observer le joueur",
             theme: {
@@ -27,7 +26,6 @@ export class FloorConfig {
             color: new Color3(0.9, 0.3, 0.1), // Rouge-Orange - Danger, pression
             rooms: 3,
             roomType: "corridor",
-            enemyType: "Sentinelle",
             philosophy: "PRESSION",
             description: "Tester les réactions sous stress",
             theme: {
@@ -39,11 +37,10 @@ export class FloorConfig {
         {
             id: 3,
             name: "Buffer",
-            // ✅ CORRECTION: Violet/Rose cyberpunk au lieu de vert
+            // Violet/Rose cyberpunk au lieu de vert
             color: new Color3(0.69, 0.25, 0.93), // #B040ED - Violet cyberpunk
             rooms: 3,
             roomType: "open",
-            enemyType: "Pulse",
             philosophy: "ADAPTATION",
             description: "Structures fractales - Espace cyberpunk",
             theme: {
@@ -55,11 +52,10 @@ export class FloorConfig {
         {
             id: 4,
             name: "Noyau",
-            // ✅ Changement pour un Jaune Électrique Cyber
+            // Jaune Électrique Cyber
             color: new Color3(1.0, 0.84, 0.0),
             rooms: 3,
             roomType: "complex",
-            enemyType: "Tank",
             philosophy: "SURCHARGE",
             description: "Centre de données - Énergie critique",
             theme: {
@@ -74,7 +70,6 @@ export class FloorConfig {
             color: new Color3(1.0, 0.1, 0.1), // Rouge vif - Culmination
             rooms: 1,
             roomType: "arena",
-            enemyType: "NEXUS",
             philosophy: "RUPTURE",
             description: "Boss - Casser la structure classique",
             theme: {
