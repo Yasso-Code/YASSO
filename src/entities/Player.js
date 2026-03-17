@@ -9,19 +9,27 @@ export class Player {
         this.scene = scene;
         this._initMesh();
 
-        // Déplacements
-        this.baseSpeed = 0.18;
+        // ─────────────────────────────
+        // GAMEPLAY NERVEUX (STYLE DIABLO/HADES)
+        // ─────────────────────────────
+        this.baseSpeed = 0.28; // ⬆️ Augmenté de 0.18 à 0.28 pour plus de fluidité
         this.speed = this.baseSpeed;
         this.lastMoveDirection = new Vector3(0, 0, 1);
+        
+        // Dash
         this.isDashing = false;
         this.isDashReady = true;
+        this.dashCooldown = 400; // ⬇️ Réduit de 800ms à 400ms pour spammer le dash
+        this.dashDistance = 5.0; // ⬆️ Augmenté de 3.5 à 5.0 pour couvrir plus de terrain
+        this.dashDuration = 12;  // ⬇️ Durée animation réduite (frames) pour sensation instantanée
+        
         this.currentDashAnim = null;
 
         // Système de vie
         this.maxHealth = 48;
         this.currentHealth = this.maxHealth;
         this.isInvincible = false;
-        this.invincibilityDuration = 1500;
+        this.invincibilityDuration = 1000; // ⬇️ Réduit un peu l'invincibilité pour garder la tension
 
         // Bonus
         this.activePower = null;
@@ -29,9 +37,6 @@ export class Player {
         this.powerTimer = 0;
 
         this.audioManager = null;
-
-        // DEBUG : power rouge actif par défaut
-        this._applyPowerVisual("Traqueur");
     }
 
     _applyPowerVisual(type) {
@@ -83,7 +88,6 @@ export class Player {
         this.isInvincible = false;
         this.mesh.material.alpha = 0.8;
         this.storedPower = null;
-        this._applyPowerVisual("Traqueur"); // DEBUG : power rouge permanent
     }
 
     // ─────────────────────────────────────────────
@@ -113,13 +117,16 @@ export class Player {
     // ─────────────────────────────────────────────
     // VALIDATION DU SOL
     // ─────────────────────────────────────────────
-    _isValidMove(targetPosition) {
-        // Le rayon part depuis la hauteur actuelle du joueur + marge haute
-        // pour eviter de rater les plateformes en hauteur (escaliers, rampes)
+    _isValidMove(targetPosition, levelManager) {
+        // ✅ OPTIMISATION: Utilisation du lookup Set O(1) de la Room
+        if (levelManager && levelManager.currentRoom) {
+            return levelManager.currentRoom.isValidPosition(targetPosition.x, targetPosition.z);
+        }
+        
+        // Fallback Raycast si LevelManager non dispo (ne devrait pas arriver in-game)
         const rayOriginY = this.mesh.position.y + 4;
         const origin = new Vector3(targetPosition.x, rayOriginY, targetPosition.z);
         const direction = new Vector3(0, -1, 0);
-        // Portee = hauteur du joueur + marge basse (autorise descente max de 2 units)
         const ray = new Ray(origin, direction, 6.5);
 
         const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
@@ -132,7 +139,7 @@ export class Player {
     // ─────────────────────────────────────────────
     // UPDATE PRINCIPAL
     // ─────────────────────────────────────────────
-    update(inputManager, aiCollector) {
+    update(inputManager, aiCollector, levelManager) {
         // Timer des pouvoirs
         if (this.activePower) {
             this.powerTimer--;
@@ -152,27 +159,51 @@ export class Player {
         let moveDir = Vector3.Zero();
         const input = inputManager.getMovementInput();
 
-        if (input.z > 0) { moveDir.z += 1; aiCollector.recordMove("up"); }
-        if (input.z < 0) { moveDir.z -= 1; aiCollector.recordMove("down"); }
-        if (input.x < 0) { moveDir.x -= 1; aiCollector.recordMove("left"); }
-        if (input.x > 0) { moveDir.x += 1; aiCollector.recordMove("right"); }
+        // Enregistrement IA (Intention du joueur)
+        if (input.z > 0) aiCollector.recordMove("up");
+        if (input.z < 0) aiCollector.recordMove("down");
+        if (input.x < 0) aiCollector.recordMove("left");
+        if (input.x > 0) aiCollector.recordMove("right");
 
-        if (moveDir.length() > 0) {
-            moveDir.normalize();
-            this.lastMoveDirection = moveDir.clone();
+        // Calcul du vecteur de mouvement
+        if (Math.abs(input.x) > 0 || Math.abs(input.z) > 0) {
+            
+            // ✅ CORRECTION : Mouvement relatif à la caméra
+            if (this.scene.activeCamera) {
+                // Récupérer le vecteur "avant" de la caméra projeté au sol
+                const camForward = this.scene.activeCamera.getForwardRay().direction;
+                camForward.y = 0;
+                camForward.normalize();
 
-            const nextPos = this.mesh.position.add(moveDir.scale(this.speed));
+                // Calculer le vecteur "droite" de la caméra
+                const camRight = Vector3.Cross(Vector3.Up(), camForward);
 
-            if (this._isValidMove(nextPos)) {
-                this.mesh.position = nextPos;
+                // Composer le mouvement final : Z = Avant/Arrière, X = Droite/Gauche
+                moveDir = camForward.scale(input.z).add(camRight.scale(input.x));
+            } else {
+                // Fallback (axes du monde)
+                moveDir = new Vector3(input.x, 0, input.z);
             }
 
-            this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+            if (moveDir.length() > 0) {
+                moveDir.normalize();
+                this.lastMoveDirection = moveDir.clone();
+
+                const nextPos = this.mesh.position.add(moveDir.scale(this.speed));
+
+                // ✅ OPTIMISATION: Passage du levelManager pour check O(1)
+                if (this._isValidMove(nextPos, levelManager)) {
+                    this.mesh.position = nextPos;
+                }
+
+                this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+            }
         }
 
         if (inputManager.isDashTriggered() && this.isDashReady) {
+            // Si le joueur ne bouge pas, on dash dans la direction du dernier mouvement (ou avant par défaut)
             const dashDir = moveDir.length() > 0 ? moveDir : this.lastMoveDirection;
-            this.executeDash(dashDir, aiCollector);
+            this.executeDash(dashDir, aiCollector, levelManager);
         }
     }
 
@@ -214,7 +245,7 @@ export class Player {
     // ─────────────────────────────────────────────
     // DASH
     // ─────────────────────────────────────────────
-    executeDash(direction, aiCollector) {
+    executeDash(direction, aiCollector, levelManager) {
         if (!this.isDashReady || this.isDashing) return;
 
         this.isDashReady = false;
@@ -227,14 +258,17 @@ export class Player {
             this._triggerPulseExplosion();
         }
 
-        const dashDistance = 3.5;
         const dashDir = direction.normalize();
 
         this._showDashTrail();
 
-        let targetPos = this.mesh.position.add(dashDir.scale(dashDistance));
-        if (!this._isValidMove(targetPos)) {
-            targetPos = this.mesh.position.clone();
+        let targetPos = this.mesh.position.add(dashDir.scale(this.dashDistance));
+        if (!this._isValidMove(targetPos, levelManager)) {
+            // Tentative de dash plus court si mur
+            targetPos = this.mesh.position.add(dashDir.scale(this.dashDistance * 0.5));
+            if (!this._isValidMove(targetPos, levelManager)) {
+                targetPos = this.mesh.position.clone();
+            }
         }
 
         const ease = new CubicEase();
@@ -245,7 +279,7 @@ export class Player {
             this.mesh,
             "position",
             60,
-            15,
+            this.dashDuration, // Plus rapide
             this.mesh.position,
             targetPos,
             Animation.ANIMATIONLOOPMODE_CONSTANT,
@@ -257,7 +291,7 @@ export class Player {
             }
         );
 
-        setTimeout(() => { this.isDashReady = true; }, 800);
+        setTimeout(() => { this.isDashReady = true; }, this.dashCooldown);
     }
 
     _showDashTrail() {

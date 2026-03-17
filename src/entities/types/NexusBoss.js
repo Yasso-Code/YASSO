@@ -6,7 +6,6 @@ import { MeshBuilder, StandardMaterial, Color3, Vector3, Animation, CubicEase, E
  * @description Boss final qui s'adapte au style du joueur
  *
  * Caractéristiques :
- * - HP: 20
  * - Phases multiples selon les HP
  * - Comportement adaptatif basé sur l'IA
  * - Forme: Octaèdre rouge géant

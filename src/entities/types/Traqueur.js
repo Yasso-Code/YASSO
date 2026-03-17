@@ -10,10 +10,10 @@ export class Traqueur extends Enemy {
         super(scene, "Traqueur", position);
 
         // ─────────────────────────────
-        // STATS
+        // STATS (NERF DIABLO STYLE)
         // ─────────────────────────────
         this.hp = 2;
-        this.speed = 0.12;
+        this.speed = 0.18; // ⬆️ Augmenté de 0.12 à 0.18 pour suivre le rythme du joueur
 
         // ─────────────────────────────
         // SYSTÈME D'AGGRO
@@ -24,8 +24,8 @@ export class Traqueur extends Enemy {
         this.loseAggroRadius = 35;
         this.isAggro = false;
 
-        // ~250ms à 60fps
-        this.reactionDelay = 15;
+        // ~160ms à 60fps (plus réactif)
+        this.reactionDelay = 10; // ⬇️ Réduit de 15 à 10 pour une réaction plus vive
         this.reactionTimer = 0;
     }
 
@@ -41,17 +41,17 @@ export class Traqueur extends Enemy {
     }
 
     /**
-     * Vérifie si la position est valide (plateforme)
+     * Vérifie si la position est valide (optimisé sans Raycast)
      */
-    _isValidPosition(targetPosition) {
-        const origin = new Vector3(targetPosition.x, 5, targetPosition.z);
-        const ray = new Ray(origin, new Vector3(0, -1, 0), 10);
-
-        const hitInfo = this.scene.pickWithRay(ray, (mesh) => {
-            return mesh.name === "p" || mesh.name === "exit" || mesh.name.includes("portal");
-        });
-
-        return hitInfo.hit;
+    _isValidPosition(targetPosition, entityManager) {
+        // ✅ OPTIMISATION: Utilisation du lookup Set O(1) de la Room
+        // Au lieu du coûteux pickWithRay
+        if (entityManager && entityManager.levelManager && entityManager.levelManager.currentRoom) {
+            return entityManager.levelManager.currentRoom.isValidPosition(targetPosition.x, targetPosition.z);
+        }
+        
+        // Fallback si pas d'accès au room manager (ne devrait pas arriver)
+        return true; 
     }
 
     /**
@@ -124,7 +124,8 @@ export class Traqueur extends Enemy {
 
         const nextPosition = this.mesh.position.add(moveVector.scale(this.speed));
 
-        if (this._isValidPosition(nextPosition)) {
+        // ✅ Passage de l'entityManager pour accéder au LevelManager -> Room
+        if (this._isValidPosition(nextPosition, entityManager)) {
             this.mesh.position = nextPosition;
             this.mesh.position.y = 1;
         }

@@ -19,7 +19,7 @@ export class InputManager {
         this.dashPressedOnce = false;
         this.pausePressedOnce = false;
         this.aiCollector = null;
-        this.layout = "WASD"; // "WASD" ou "ZQSD"
+        this.layout = "ZQSD"; // ✅ Par défaut ZQSD
         this._initListeners();
     }
 

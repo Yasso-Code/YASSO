@@ -17,6 +17,7 @@ export class Room {
 
         // Données de la salle
         this.platforms = [];
+        this.platformSet = new Set(); // ✅ OPTIMISATION: Lookup O(1)
         this.spawnPoints = [];
         this.decorations = [];
 
@@ -40,6 +41,32 @@ export class Room {
      */
     addPlatform(position) {
         this.platforms.push(position.clone());
+        // ✅ Stockage optimisé pour collision check rapide
+        // On arrondit pour éviter les erreurs de virgule flottante
+        const key = `${Math.round(position.x)},${Math.round(position.z)}`;
+        this.platformSet.add(key);
+    }
+
+    /**
+     * Vérifie si une position (x, z) correspond à une plateforme valide
+     * @param {number} x
+     * @param {number} z
+     * @returns {boolean}
+     */
+    isValidPosition(x, z) {
+        // On vérifie la position exacte (les plateformes sont placées sur une grille)
+        // Mais pour le mouvement fluide, on doit vérifier si on est "sur" une plateforme.
+        // Les plateformes font généralement 4x4 (spacing=4).
+        // Donc si spacing=4, une plateforme en (0,0) couvre de -2 à +2.
+        
+        // Approche simple : snap to grid 4x4
+        // x arrondi au multiple de 4 le plus proche
+        const spacing = 4;
+        const gridX = Math.round(x / spacing) * spacing;
+        const gridZ = Math.round(z / spacing) * spacing;
+        
+        const key = `${gridX},${gridZ}`;
+        return this.platformSet.has(key);
     }
 
     /**

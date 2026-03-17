@@ -1,9 +1,6 @@
 import { Traqueur } from "../entities/types/Traqueur.js";
 import { Sentinelle } from "../entities/types/Sentinelle.js";
 import { Pulse } from "../entities/types/Pulse.js";
-import { Drone } from "../entities/types/Drone.js";
-import { Tank } from "../entities/types/Tank.js";
-import { Parasite } from "../entities/types/Parasite.js";
 import { NexusBoss } from "../entities/types/NexusBoss.js";
 import { SentinelleElite } from "../entities/types/SentinelleElite.js";
 
@@ -54,18 +51,6 @@ export class EntityManager {
 
             case "Pulse":
                 enemy = new Pulse(this.scene, position);
-                break;
-
-            case "Drone":
-                enemy = new Drone(this.scene, position);
-                break;
-
-            case "Tank":
-                enemy = new Tank(this.scene, position);
-                break;
-
-            case "Parasite":
-                enemy = new Parasite(this.scene, position);
                 break;
 
             case "SentinelleElite":

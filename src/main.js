@@ -1,6 +1,9 @@
-import { Engine, Scene, FreeCamera, Vector3, Color3 } from "@babylonjs/core";
+import { Engine, Scene, FollowCamera, Vector3, Color3 } from "@babylonjs/core";
 import "@babylonjs/loaders";
 import { GameManager } from "./core/GameManager.js";
+
+// ✅ CONFIG: Afficher les FPS (mettre à false pour désactiver)
+const SHOW_FPS = true;
 
 /**
  *
@@ -48,14 +51,22 @@ class Game {
      * Initialise la caméra
      */
     _initCamera() {
-        const cameraOffset = new Vector3(0, 12, -12);
-        this.camera = new FreeCamera("mainCamera", cameraOffset, this.scene);
+        // Utilisation de FollowCamera pour un style 3ème personne (style Hades/GOW)
+        this.camera = new FollowCamera("mainCamera", new Vector3(0, 10, -10), this.scene);
 
-        // Ajoute cette ligne pour empêcher la souris/clavier de faire tourner la caméra
-        // On veut que SEUL le code (GameManager) puisse la bouger.
+        // Configuration initiale (sera ajustée dynamiquement dans GameManager)
+        // ⬆️ VALEURS AUGMENTÉES POUR STYLE DIABLO 4 (Vue plus large, suivi plus rapide)
+        this.camera.radius = 16;         
+        this.camera.heightOffset = 10;    
+        this.camera.rotationOffset = 180; 
+        
+        this.camera.cameraAcceleration = 0.1; // ⬆️ Plus réactif (0.05 -> 0.1)
+        this.camera.maxCameraSpeed = 40;       // ⬆️ Plus rapide (20 -> 40)
+
+        // Désactiver les contrôles par défaut (souris/clavier)
         this.camera.inputs.clear();
 
-        console.log("✅ Caméra stabilisée (Inputs désactivés)");
+        console.log("✅ FollowCamera initialisée");
     }
 
     /**
@@ -83,9 +94,18 @@ class Game {
      * Démarre la boucle de rendu
      */
     _startRenderLoop() {
+        // Référence pour le compteur FPS
+        const fpsDiv = document.getElementById("fps-counter");
+
         // Boucle de rendu Babylon.js
         this.engine.runRenderLoop(() => {
             this.scene.render();
+
+            // ✅ Mise à jour du compteur FPS (si activé)
+            if (SHOW_FPS && fpsDiv) {
+                fpsDiv.style.display = "block";
+                fpsDiv.innerHTML = "FPS: " + this.engine.getFps().toFixed(0);
+            }
         });
 
         // Redimensionnement automatique

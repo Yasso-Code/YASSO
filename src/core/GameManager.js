@@ -1,4 +1,4 @@
-import { Color3, Vector3 } from "@babylonjs/core";
+import { Color3, Vector3, MeshBuilder } from "@babylonjs/core";
 import { DataCollector } from "../logic/ai/DataCollector.js";
 import { InputManager } from "../logic/InputManager.js";
 import { LevelManager } from "../logic/LevelManager.js";
@@ -33,7 +33,8 @@ export class GameManager {
 
         this.gameState = this.STATES.START;
         this.gameStartTime = 0;
-        this.cameraOffset = new Vector3(0, 12, -12);
+        
+        // (Supprimé) cameraOffset n'est plus utilisé avec FollowCamera
 
         // Initialiser tous les managers
         this._initManagers();
@@ -244,11 +245,9 @@ export class GameManager {
         this.gameStartTime = Date.now();
 
         // ✅ Reset complet du joueur (santé, dash, état)
-        // player.reset() remet currentHealth à maxHealth et nettoie les états
         if (typeof this.player.reset === 'function') {
             this.player.reset();
         } else {
-            // Fallback si reset() n'existe pas encore dans Player
             this.player.currentHealth = this.player.maxHealth ?? 3;
         }
 
@@ -261,6 +260,17 @@ export class GameManager {
 
         // ✅ Charger le premier étage (spawnPlayer inclus)
         this.levelManager.loadFloor(1, this.player, this.ai);
+
+        // ✅ CRÉER UN "DUMMY" POUR LA CAMÉRA
+        // Ce dummy suivra la POSITION du joueur mais PAS sa rotation.
+        // Cela empêche la caméra de tourner follement quand le joueur pivote.
+        if (!this.cameraTarget) {
+            this.cameraTarget = MeshBuilder.CreateBox("cameraTarget", { size: 0.1 }, this.scene);
+            this.cameraTarget.isVisible = false;
+        }
+
+        // Attacher la caméra à ce dummy
+        this.camera.lockedTarget = this.cameraTarget;
     }
 
     /**
@@ -275,14 +285,8 @@ export class GameManager {
         if (this.gameState === this.STATES.PLAYING) {
             console.log("⏸️ JEU EN PAUSE");
             this.gameState = this.STATES.PAUSED;
-            
-            // Afficher le menu pause
             this.pauseMenu.classList.add("active");
             
-            // Masquer le HUD (optionnel)
-            // this.hudManager.hide();
-            
-            // Sync UI du menu pause avec l'état actuel
             const currentLayout = this.inputs.layout;
             const radio = document.querySelector(`input[name="pause-layout"][value="${currentLayout}"]`);
             if (radio) radio.checked = true;
@@ -290,12 +294,7 @@ export class GameManager {
         } else if (this.gameState === this.STATES.PAUSED) {
             console.log("▶️ REPRISE DU JEU");
             this.gameState = this.STATES.PLAYING;
-            
-            // Masquer le menu pause
             this.pauseMenu.classList.remove("active");
-            
-            // Réafficher le HUD
-            // this.hudManager.show();
         }
     }
 
@@ -394,8 +393,6 @@ export class GameManager {
         }
         
         // Gestion de la touche Pause
-        // On permet de mettre en pause même si on est en train de jouer,
-        // mais aussi de sortir de pause.
         if (this.inputs.isPauseTriggered()) {
             if (this.gameState === this.STATES.PLAYING || this.gameState === this.STATES.PAUSED) {
                 this.togglePause();
@@ -404,15 +401,21 @@ export class GameManager {
 
         // Si pas en train de jouer, juste mettre à jour le HUD et sortir
         if (this.gameState !== this.STATES.PLAYING) {
-            // Si en pause, on peut quand même update le HUD pour voir les changements de volume si besoin
-            // mais l'essentiel du jeu est figé
             return;
         }
 
         // ─────────────────────────────────────────────────────────
         // UPDATE PLAYER
         // ─────────────────────────────────────────────────────────
-        this.player.update(this.inputs, this.ai);
+        // ✅ CORRECTION: Passage du LevelManager pour les collisions optimisées
+        this.player.update(this.inputs, this.ai, this.levelManager);
+
+        // ✅ UPDATE DUMMY CAMÉRA
+        // Le dummy suit exactement la position du joueur, mais garde sa rotation fixe (ou contrôlée autrement)
+        if (this.cameraTarget && this.player.mesh) {
+            this.cameraTarget.position.copyFrom(this.player.mesh.position);
+            // On ne touche PAS à la rotation du dummy, donc la caméra reste stable !
+        }
 
         // ─────────────────────────────────────────────────────────
         // CHECK INTERACTIONS
@@ -421,11 +424,15 @@ export class GameManager {
         this.levelManager.checkExitInteraction(this.player, this.entityManager, this.ai);
 
         // ─────────────────────────────────────────────────────────
-        // UPDATE CAMÉRA (Style Hades)
+        // UPDATE CAMÉRA (FollowCamera gère le suivi automatiquement)
         // ─────────────────────────────────────────────────────────
         if (this.player.mesh) {
-            this._handleCameraZoom(); // Gère les changements d'offset
-            this._updateCamera();     // Applique le mouvement fluide (Lerp)
+            // On s'assure que la cible est bien verrouillée sur le dummy
+            if (this.cameraTarget && this.camera.lockedTarget !== this.cameraTarget) {
+                this.camera.lockedTarget = this.cameraTarget;
+            }
+            
+            this._handleCameraZoom(); // Gère le zoom via radius/height
         }
 
         // ─────────────────────────────────────────────────────────
@@ -446,8 +453,6 @@ export class GameManager {
         // ─────────────────────────────────────────────────────────
         // CHECK CONDITIONS DE FIN
         // ─────────────────────────────────────────────────────────
-        // Guard : ignore les conditions de mort pendant 1s après le démarrage
-        // pour éviter le re-trigger immédiat si currentHealth n'est pas reset
         const timeSinceStart = Date.now() - this.gameStartTime;
         if (timeSinceStart > 1000 && this.player.currentHealth <= 0) {
             this._transitionToGameOver();
@@ -469,18 +474,22 @@ export class GameManager {
     }
 
     /**
-     * Gère le zoom de la caméra
+     * Gère le zoom de la caméra (Modifie radius et heightOffset)
      * @private
      */
     _handleCameraZoom() {
+        // Zoom Avant (Rapprochement)
         if (this.inputs.isZoomInTriggered()) {
-            if (this.cameraOffset.length() > 5) {
-                this.cameraOffset.scaleInPlace(0.98);
+            if (this.camera.radius > 8) { // ⬇️ MIN RADIUS 8
+                this.camera.radius *= 0.98;
+                this.camera.heightOffset *= 0.98;
             }
         }
+        // Zoom Arrière (Éloignement)
         if (this.inputs.isZoomOutTriggered()) {
-            if (this.cameraOffset.length() < 30) {
-                this.cameraOffset.scaleInPlace(1.02);
+            if (this.camera.radius < 40) { // ⬆️ MAX RADIUS 40
+                this.camera.radius *= 1.02;
+                this.camera.heightOffset *= 1.02;
             }
         }
     }
@@ -519,28 +528,29 @@ export class GameManager {
     }
 
     /**
-     * Téléporte instantanément la caméra sur le joueur (sans Lerp).
-     * Remet aussi l'offset à sa valeur par défaut pour éviter
-     * les décalages accumulés par _handleCameraZoom entre salles.
-     * Appelé par LevelManager.spawnPlayer() à chaque changement de salle.
+     * Snap caméra lors du spawn
+     * Appelé par LevelManager.spawnPlayer()
      */
     _snapCameraToPlayer(spawnPos) {
         if (!this.camera) return;
-        this.cameraOffset = new Vector3(0, 12, -12); // reset offset
-        this.camera.position.copyFrom(spawnPos.add(this.cameraOffset));
-        this.camera.setTarget(spawnPos);
-    }
+        
+        // Reset des paramètres de zoom par défaut (VALEURS DIABLO)
+        this.camera.radius = 16;
+        this.camera.heightOffset = 10;
+        this.camera.rotationOffset = 180; 
 
-    _updateCamera() {
-        if (this.player && this.player.mesh) {
-            // Position cible souhaitée
-            const targetPosition = this.player.mesh.position.add(this.cameraOffset);
+        // ✅ CORRECTION : Placer la caméra au SUD du joueur (Z-), car rotationOffset=180
+        // Avant : new Vector3(0, 8, -12).
+        // Maintenant : new Vector3(0, 10, -16) (pour match rayon 16, hauteur 10)
+        const startPos = spawnPos.add(new Vector3(0, 10, -16));
+        this.camera.position.copyFrom(startPos);
 
-            // Interpolation linéaire (Lerp) pour la fluidité : 0.1 est la vitesse de suivi
-            this.camera.position = Vector3.Lerp(this.camera.position, targetPosition, 0.05);
-
-            // On regarde toujours le joueur
-            this.camera.setTarget(this.player.mesh.position);
+        // Si on a un dummy target, on le place aussi au spawn
+        if (this.cameraTarget) {
+            this.cameraTarget.position.copyFrom(spawnPos);
+            // On s'assure que la rotation du dummy est neutre pour commencer
+            this.cameraTarget.rotation = Vector3.Zero();
+            this.camera.lockedTarget = this.cameraTarget;
         }
     }
 }

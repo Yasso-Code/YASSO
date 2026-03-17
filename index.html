@@ -13,6 +13,13 @@
 
     <!-- Interface Utilisateur (UI) -->
     <div id="ui-layer">
+        
+        <!-- ✅ COMPTEUR FPS (Facile à masquer via CSS ou JS) -->
+        <div id="fps-counter" 
+             style="position: absolute; top: 0; left: 0; background: rgba(0, 0, 0, 0.8); color: #00ff00; padding: 5px 10px; font-family: 'Courier New', monospace; font-size: 12px; z-index: 100; pointer-events: none; display: none;">
+            FPS: 60
+        </div>
+
         <!-- Écran de Démarrage -->
         <div id="start-screen" class="screen active">
             <h1>YASSO</h1>
@@ -23,11 +30,11 @@
                 <p style="margin-bottom: 10px; color: #00ffff;">CONFIGURATION CLAVIER :</p>
                 <div style="display: flex; justify-content: center; gap: 20px; font-family: 'Courier New', monospace;">
                     <label style="cursor: pointer; color: #fff; display: flex; align-items: center; gap: 8px;">
-                        <input type="radio" name="layout" value="WASD" checked style="accent-color: #00ffff;"> 
+                        <input type="radio" name="layout" value="WASD" style="accent-color: #00ffff;"> 
                         WASD (Qwerty)
                     </label>
                     <label style="cursor: pointer; color: #fff; display: flex; align-items: center; gap: 8px;">
-                        <input type="radio" name="layout" value="ZQSD" style="accent-color: #00ffff;"> 
+                        <input type="radio" name="layout" value="ZQSD" checked style="accent-color: #00ffff;"> 
                         ZQSD (Azerty)
                     </label>
                 </div>
@@ -59,7 +66,7 @@
                         WASD
                     </label>
                     <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                        <input type="radio" name="pause-layout" value="ZQSD" style="accent-color: #ffff00;"> 
+                        <input type="radio" name="pause-layout" value="ZQSD" checked style="accent-color: #ffff00;"> 
                         ZQSD
                     </label>
                 </div>

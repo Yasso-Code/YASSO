@@ -209,14 +209,6 @@ export class LevelManager {
     checkExitInteraction(player, entityManager, aiData) {
         // ✅ Empêche de quitter la salle si on vient de spawn
 
-        // Bloque la sortie si un mini-boss est en vie
-        if (this.currentFloor === 3 && this.currentRoomIndex === 2) {
-            if (this.entityManager.getEnemyCount() > 0) {
-                console.log("🚫 Mini-boss still alive — exit locked");
-                return;
-            }
-        }
-
         if (Date.now() < this.spawnProtectionTime) return;
 
         if (this.checkPortalInteraction(player, entityManager, aiData)) return;

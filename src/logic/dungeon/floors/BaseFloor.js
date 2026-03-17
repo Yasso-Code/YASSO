@@ -236,4 +236,53 @@ export class BaseFloor {
             room.addSpawnPoint(new Vector3(shuffled[i].x, 1, shuffled[i].z));
         }
     }
+
+    /**
+     * ✅ AJOUT: Méthode helper pour Floor3 qui manquait
+     * Combine les plateformes valides, récupère les types d'ennemis et lance le spawn par budget.
+     */
+    static spawnBalancedEnemies(room, allPlatforms, arenaPlatforms, extensionPlatforms, playerSpawnPos) {
+        // 1. On filtre les points valides (loin du spawn joueur)
+        // On utilise allPlatforms pour maximiser les possibilités de spawn
+        const validPoints = this.filterByDistance(allPlatforms, playerSpawnPos, room.floorNumber);
+
+        // 2. On récupère les types d'ennemis pour cette salle
+        // On utilise mappedRoomIndex (vrai type de salle) si dispo, sinon l'index de run
+        const roomIdx = (typeof room.mappedRoomIndex !== 'undefined') ? room.mappedRoomIndex : room.roomIndex;
+        const enemyTypes = this.getEnemyTypesForRoom(room.floorNumber, roomIdx);
+
+        // 3. On lance la génération par budget
+        // room.roomIndex + 1 car spawnFromBudget attend 1, 2, 3...
+        this.spawnFromBudget(room, validPoints, enemyTypes, room.roomIndex + 1);
+    }
+
+    /**
+     * ✅ AJOUT: Récupération des types d'ennemis (dupliqué de FloorGenerator pour éviter les cycles)
+     */
+    static getEnemyTypesForRoom(floorNumber, roomIndex) {
+        const progression = {
+            1: [
+                ["Traqueur"],
+                ["Traqueur", "Sentinelle"],
+                ["Traqueur", "Sentinelle"]
+            ],
+            2: [
+                ["Traqueur", "Drone"],
+                ["Sentinelle", "Pulse"],
+                ["Traqueur", "Sentinelle", "Pulse"]
+            ],
+            3: [
+                ["Sentinelle", "Pulse"],
+                ["Traqueur", "Pulse", "Drone"],
+                ["Traqueur", "Sentinelle", "Drone"]
+            ],
+            4: [
+                ["Sentinelle", "Pulse", "Drone"],
+                ["Traqueur", "Sentinelle", "Pulse", "Tank"],
+                ["Traqueur", "Sentinelle", "Pulse", "Parasite"]
+            ],
+            5: [["NEXUS"]]
+        };
+        return progression[floorNumber]?.[roomIndex] || ["Traqueur"];
+    }
 }
