@@ -2,7 +2,7 @@ import { Color3 } from "@babylonjs/core";
 
 /**
  * @class FloorConfig
- * @description Configuration des 5 étages du donjon
+ * @description Configuration des 4 étages du donjon (Raccourci pour run rapide)
  */
 export class FloorConfig {
     static FLOORS = [
@@ -50,22 +50,7 @@ export class FloorConfig {
             }
         },
         {
-            id: 4,
-            name: "Noyau",
-            // Jaune Électrique Cyber
-            color: new Color3(1.0, 0.84, 0.0),
-            rooms: 3,
-            roomType: "complex",
-            philosophy: "SURCHARGE",
-            description: "Centre de données - Énergie critique",
-            theme: {
-                ambientIntensity: 0.8,
-                fogDensity: 0.05,
-                emissiveMultiplier: 2.0
-            }
-        },
-        {
-            id: 5,
+            id: 4, // ⬅️ Le Nexus devient le 4ème et dernier étage
             name: "Nexus",
             color: new Color3(1.0, 0.1, 0.1), // Rouge vif - Culmination
             rooms: 1,
@@ -82,11 +67,12 @@ export class FloorConfig {
 
     /**
      * Récupère la configuration d'un étage
-     * @param {number} floorNumber - Numéro de l'étage (1-5)
+     * @param {number} floorNumber - Numéro de l'étage (1-4)
      * @returns {Object} Configuration de l'étage
      */
     static getFloor(floorNumber) {
-        const index = Math.min(Math.max(floorNumber - 1, 0), 4);
+        // ⬅️ On limite l'index maximum à 3 (car il y a 4 éléments dans le tableau)
+        const index = Math.min(Math.max(floorNumber - 1, 0), 3);
         return this.FLOORS[index];
     }
 
@@ -104,7 +90,8 @@ export class FloorConfig {
      * @returns {boolean}
      */
     static isBossFloor(floorNumber) {
-        return floorNumber === 5;
+        // ⬅️ Le boss se trouve maintenant à l'étage 4
+        return floorNumber === 4;
     }
 
     /**

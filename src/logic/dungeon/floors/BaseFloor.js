@@ -24,6 +24,7 @@ export class BaseFloor {
         Sentinelle: 2,
         Drone:      2,
         Pulse:      3,
+        Bombardier: 3,
         Tank:       4,
         Parasite:   3,
         NEXUS:      10,
@@ -47,12 +48,30 @@ export class BaseFloor {
     static REF_PLATFORM_COUNT = 53;
 
     // ─────────────────────────────────────────────────────────
-    // CONFIG PAR ÉTAGE
-    // safeRadius : distance minimale spawn ennemi / joueur
-    // maxExpensiveRatio : max % d'ennemis de coût >= 2
+    // HP MULT PAR ÉTAGE — IA Edition
+    // Multiplicateur de PV appliqué à chaque ennemi à son spawn.
+    // Floor1 : PV normaux (hpMult=1.0) — le joueur apprend le jeu.
+    // Floor2 : PV augmentés (hpMult=1.5) — les ennemis encaissent plus.
+    // Transmis via aiData.hpMult → EntityManager → ennemi.applyHpMult()
     // ─────────────────────────────────────────────────────────
+    static HP_MULTS = {
+        1: 1.0,  // Floor1 : PV de base
+        2: 1.5,  // Floor2 : +50% PV
+        3: 2.0,  // Floor3 : +100% PV
+        4: 2.5,  // Floor4 : +150% PV
+        5: 3.0,  // Floor5 : Boss
+    };
+
+    /**
+     * Retourne le hpMult pour un étage donné.
+     * Peut être surchargé par aiData.hpMult (IA Edition dynamique).
+     */
+    static getHpMult(floorNumber, aiData = null) {
+        const base = this.HP_MULTS[floorNumber] ?? 1.0;
+        return aiData?.hpMult ?? base;
+    }
     static FLOOR_CONFIG = {
-        1: { safeRadius: 20, maxExpensiveRatio: 0.4 },
+        1: { safeRadius: 35, maxExpensiveRatio: 0.4 },
         2: { safeRadius: 20, maxExpensiveRatio: 0.5 },
         3: { safeRadius: 18, maxExpensiveRatio: 0.55 },
         4: { safeRadius: 16, maxExpensiveRatio: 0.6 },
@@ -106,12 +125,6 @@ export class BaseFloor {
                 const excess = relativeSize - 1.15;
 
                 const nerfMult = 1 - Math.min(0.25, excess * 0.5);
-
-                console.log(
-                    `⚡ RUN BALANCE: grande salle en R2 | rel=${relativeSize.toFixed(
-                        2
-                    )} nerf=${nerfMult.toFixed(2)}`
-                );
 
                 sizeMult *= nerfMult;
             }
@@ -215,30 +228,7 @@ export class BaseFloor {
 
         room.enemyList = enemyList;
 
-        // ─────────────────────────────────────────
-        // DEBUG
-        // ─────────────────────────────────────────
 
-        const sizeRatio = platformCount / this.REF_PLATFORM_COUNT;
-        const sizeMultRaw = 1 + ((sizeRatio - 1) * 0.5);
-        const sizeMult = Math.min(1.25, Math.max(0.9, sizeMultRaw));
-
-        console.log(
-            `🎮 F${room.floorNumber}-R${roomPosition} size=${platformCount} ` +
-            `mult=${sizeMult.toFixed(2)} budget=${budget}`
-        );
-
-        // résumé des ennemis
-        const counts = {};
-        enemyList.forEach(e => counts[e] = (counts[e] || 0) + 1);
-
-        const summary = Object.entries(counts)
-            .map(([k, v]) => `${v}${k[0]}`)
-            .join(" + ");
-
-        console.log(
-            `⚔️ enemies → ${enemyList.length} (${summary})`
-        );
     }
 
     /**
@@ -270,7 +260,6 @@ export class BaseFloor {
             const cap = caps[roomPosition - 1];
             let sentinels = enemyList.filter(e => e === "Sentinelle").length;
             if (sentinels > cap) {
-                console.log(`⚡ Sentinel cap R${roomPosition} → ${cap}`);
                 let removed = sentinels - cap;
                 for (let i = enemyList.length - 1; i >= 0 && removed > 0; i--) {
                     if (enemyList[i] === "Sentinelle") {
@@ -321,7 +310,6 @@ export class BaseFloor {
                 }
             }
             for (let i = added; i < needed; i++) enemyList.push(type);
-            console.log(`⚡ ${type} min → ${target} (${added} convertis)`);
         }
 
         return enemyList;

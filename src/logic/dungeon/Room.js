@@ -54,19 +54,21 @@ export class Room {
      * @returns {boolean}
      */
     isValidPosition(x, z) {
-        // On vérifie la position exacte (les plateformes sont placées sur une grille)
-        // Mais pour le mouvement fluide, on doit vérifier si on est "sur" une plateforme.
-        // Les plateformes font généralement 4x4 (spacing=4).
-        // Donc si spacing=4, une plateforme en (0,0) couvre de -2 à +2.
-        
-        // Approche simple : snap to grid 4x4
-        // x arrondi au multiple de 4 le plus proche
         const spacing = 4;
+        // Snap principal
         const gridX = Math.round(x / spacing) * spacing;
         const gridZ = Math.round(z / spacing) * spacing;
-        
-        const key = `${gridX},${gridZ}`;
-        return this.platformSet.has(key);
+
+        // Vérifier le snap principal + les 8 tiles adjacentes
+        // Évite les blocages aux bords de zones quand la position flotte
+        // entre deux tiles (ex: x=23.7 snap à 24 mais la tile est à 20)
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+                const key = `${gridX + dx * spacing},${gridZ + dz * spacing}`;
+                if (this.platformSet.has(key)) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -130,7 +132,6 @@ export class Room {
             }
         }
 
-        console.log(`🚪 Portail de sortie: ${maxDistance.toFixed(1)} unités du spawn`);
         return farthest.clone();
     }
 

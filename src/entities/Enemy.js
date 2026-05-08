@@ -15,14 +15,17 @@ export class Enemy {
         this.scene = scene;
         this.type = type;
         this.isDestroyed = false;
-        this.hp = 1;
+        this.hp = 1;      // Valeur par défaut — ÉCRASÉE par la classe fille avant _initBase
         this.mesh = null;
-        this._initBase(startPosition);
+        // ⚠️ _initBase est appelé ICI, AVANT que les classes filles assignent leur hp.
+        // Les classes filles qui ont un hp différent de 1 doivent appeler _initBase()
+        // ELLES-MÊMES à la fin de leur constructeur, ou redéfinir leurs stats AVANT super().
+        // → Solution retenue : _initBase() n'est PAS appelé ici, chaque classe fille l'appelle.
     }
 
     /**
-     * Initialise la base de l'ennemi
-     * @private
+     * Doit être appelé à la fin du constructeur de chaque classe fille,
+     * APRÈS avoir défini this.hp, this.maxHp, etc.
      */
     _initBase(startPosition) {
         this.mesh = this._createMesh();

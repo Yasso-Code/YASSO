@@ -33,7 +33,7 @@ export class GameManager {
 
         this.gameState = this.STATES.START;
         this.gameStartTime = 0;
-        
+
         // (Supprimé) cameraOffset n'est plus utilisé avec FollowCamera
 
         // Initialiser tous les managers
@@ -87,7 +87,6 @@ export class GameManager {
         this.levelManager.setAudioManager(this.audioManager);
         this.player.setAudioManager(this.audioManager);
 
-        console.log("✅ GameManager: Tous les managers initialisés et liés.");
     }
 
     /**
@@ -119,7 +118,6 @@ export class GameManager {
         window.addEventListener("keydown", async (e) => {
             if (e.key === "Enter") {
                 // 1️⃣ D'ABORD : Unlock audio (CRITIQUE)
-                console.log("🎹 Enter détecté - Unlock audio...");
                 await this.audioManager.unlockAudio();
 
                 // 2️⃣ ENSUITE : Gérer l'état
@@ -133,7 +131,7 @@ export class GameManager {
         });
 
         // --- PAUSE MENU CONTROLS ---
-        
+
         // Bouton Reprendre
         const resumeBtn = document.getElementById("resume-btn");
         if (resumeBtn) {
@@ -167,26 +165,21 @@ export class GameManager {
      * @private
      */
     _onLevelLoaded(spawnPoints, enemyTypes) {
-        // Nettoyer les ennemis existants
         this.entityManager.clearAll();
 
-        // ✅ AJOUT: Vérifier si No Enemies est actif
         if (this.debugManager && !this.debugManager.shouldSpawnEnemies()) {
-            console.log("🔧 Debug: No enemies mode - Aucun ennemi spawné");
             return;
         }
 
-        // Sécurité : si enemyTypes n'est pas fourni, on utilise un Traqueur par défaut
         const types = (enemyTypes && Array.isArray(enemyTypes)) ? enemyTypes : ["Traqueur"];
 
-        // Spawner les nouveaux ennemis
-        spawnPoints.forEach((point, index) => {
-            // Sélection cyclique parmi les types autorisés pour cette salle précise
-            const type = types[index % types.length];
-            this.entityManager.spawnEnemy(type, point);
-        });
+        // Correspondance exacte spawnPoints[i] → types[i]
+        // Les deux tableaux sont construits en parallèle dans chaque FloorX
+        const count = Math.min(spawnPoints.length, types.length);
+        for (let i = 0; i < count; i++) {
+            this.entityManager.spawnEnemy(types[i], spawnPoints[i]);
+        }
 
-        // Changer la musique pour le Boss (Étage 5)
         if (this.levelManager.currentFloor === 5) {
             this.audioManager.playMusic("boss");
         } else {
@@ -201,7 +194,6 @@ export class GameManager {
      * @private
      */
     _onRoomCleared(roomIndex) {
-        console.log(`📊 Données collectées pour la salle ${roomIndex + 1}`);
     }
 
     /**
@@ -220,7 +212,6 @@ export class GameManager {
      * Démarre le jeu
      */
     startGame() {
-        console.log("🎮 Démarrage du jeu");
 
         // ✅ AJOUT : Récupération du layout clavier choisi
         const selectedLayout = document.querySelector('input[name="layout"]:checked').value;
@@ -277,22 +268,19 @@ export class GameManager {
      * Redémarre le jeu
      */
     restartGame() {
-        console.log("🔄 Redémarrage du jeu");
         this.startGame();
     }
 
     togglePause() {
         if (this.gameState === this.STATES.PLAYING) {
-            console.log("⏸️ JEU EN PAUSE");
             this.gameState = this.STATES.PAUSED;
             this.pauseMenu.classList.add("active");
-            
+
             const currentLayout = this.inputs.layout;
             const radio = document.querySelector(`input[name="pause-layout"][value="${currentLayout}"]`);
             if (radio) radio.checked = true;
 
         } else if (this.gameState === this.STATES.PAUSED) {
-            console.log("▶️ REPRISE DU JEU");
             this.gameState = this.STATES.PLAYING;
             this.pauseMenu.classList.remove("active");
         }
@@ -305,7 +293,6 @@ export class GameManager {
     _transitionToGameOver() {
         if (this.gameState === this.STATES.GAMEOVER) return;
 
-        console.log("💀 GAME OVER");
 
         this.gameState = this.STATES.GAMEOVER;
 
@@ -324,7 +311,6 @@ export class GameManager {
      * @private
      */
     _transitionToGameWon() {
-        console.log("🎉 VICTOIRE !");
 
         this.gameState = this.STATES.GAMEWON;
 
@@ -375,7 +361,6 @@ export class GameManager {
             this._update();
         });
 
-        console.log("✅ Boucle de jeu démarrée");
     }
 
     /**
@@ -391,7 +376,7 @@ export class GameManager {
         if (this.debugManager) {
             this.debugManager.update();
         }
-        
+
         // Gestion de la touche Pause
         if (this.inputs.isPauseTriggered()) {
             if (this.gameState === this.STATES.PLAYING || this.gameState === this.STATES.PAUSED) {
@@ -431,7 +416,7 @@ export class GameManager {
             if (this.cameraTarget && this.camera.lockedTarget !== this.cameraTarget) {
                 this.camera.lockedTarget = this.cameraTarget;
             }
-            
+
             this._handleCameraZoom(); // Gère le zoom via radius/height
         }
 
@@ -533,11 +518,11 @@ export class GameManager {
      */
     _snapCameraToPlayer(spawnPos) {
         if (!this.camera) return;
-        
+
         // Reset des paramètres de zoom par défaut (VALEURS DIABLO)
         this.camera.radius = 16;
         this.camera.heightOffset = 10;
-        this.camera.rotationOffset = 180; 
+        this.camera.rotationOffset = 180;
 
         // ✅ CORRECTION : Placer la caméra au SUD du joueur (Z-), car rotationOffset=180
         // Avant : new Vector3(0, 8, -12).

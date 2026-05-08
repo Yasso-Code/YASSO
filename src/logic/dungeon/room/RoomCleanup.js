@@ -1,4 +1,3 @@
-
 // Assure qu'aucun mesh ne reste en mémoire entre deux salles.
 
 export class RoomCleanup {

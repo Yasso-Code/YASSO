@@ -2,8 +2,7 @@ import { Room } from "./Room.js";
 import { Floor1 } from "./floors/Floor1.js";
 import { Floor2 } from "./floors/Floor2.js";
 import { Floor3 } from "./floors/Floor3.js";
-import { Floor4 } from "./floors/Floor4.js";
-import { Floor5 } from "./floors/Floor5.js";
+import { Floor5 } from "./floors/Floor5.js"; // On garde Floor5 car c'est lui qui contient le code du Boss
 
 export class FloorGenerator {
 
@@ -14,33 +13,20 @@ export class FloorGenerator {
         if (!this._roomOrders[key]) {
 
             if (floorNumber === 1) {
-                const rest = [1, 2].sort(() => Math.random() - 0.5);
-                this._roomOrders[key] = [0, ...rest];
+                // Pos fixe : NoeudCentral(0) → BrokenStar(2) → Twins(1)
+                this._roomOrders[key] = [0, 2, 1];
 
             } else if (floorNumber === 2) {
-                // SplitSquare (index 2) jamais en position 1
-                const indices = [0, 1, 2];
-                for (let i = indices.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [indices[i], indices[j]] = [indices[j], indices[i]];
-                }
-                if (indices[0] === 2) [indices[0], indices[1]] = [indices[1], indices[0]];
-                this._roomOrders[key] = indices;
+                // Pos fixe : TheCross(0) → SplitSquare(2) → DiamondRing(1)
+                this._roomOrders[key] = [0, 2, 1];
 
-            } else if (floorNumber === 3 || floorNumber === 4) {
-                // Mini-boss (salle 0 ou 2) toujours en dernière position
-                const miniBossIndex = Math.random() < 0.5 ? 0 : 2;
-                const normalIndex   = miniBossIndex === 0 ? 2 : 0;
-                const firstTwo = [normalIndex, 1].sort(() => Math.random() - 0.5);
-                this._roomOrders[key] = [...firstTwo, miniBossIndex];
+            } else if (floorNumber === 3) {
+                // Pos fixe : SequentialChambers(0) → NeuralBridge(1) → ThreeClusters(2)
+                this._roomOrders[key] = [0, 1, 2];
 
             } else {
-                const indices = Array.from({ length: totalRooms }, (_, i) => i);
-                for (let i = indices.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [indices[i], indices[j]] = [indices[j], indices[i]];
-                }
-                this._roomOrders[key] = indices;
+                // Floor 4 (Boss) : ordre naturel (1 seule salle)
+                this._roomOrders[key] = Array.from({ length: totalRooms }, (_, i) => i);
             }
         }
         return this._roomOrders[key];
@@ -52,6 +38,9 @@ export class FloorGenerator {
 
     static resetAllOrders() {
         this._roomOrders = {};
+        // ⚖️ Reset des caches de tailles pour un équilibrage propre à chaque run
+        Floor1.resetSizeCache();
+        Floor2.resetSizeCache();
     }
 
     /**
@@ -63,10 +52,12 @@ export class FloorGenerator {
      * getEnemyTypesForRoom() est supprimé — la palette vit dans chaque Floor.
      */
     static generateRoom(floorNumber, roomIndex, roomType, aiData = null) {
-        const floorModules = { 1: Floor1, 2: Floor2, 3: Floor3, 4: Floor4, 5: Floor5 };
+        // ⬅️ Astuce : quand le jeu demande l'étage 4, on lui donne Floor5
+        const floorModules = { 1: Floor1, 2: Floor2, 3: Floor3, 4: Floor5 };
         const module = floorModules[floorNumber] || Floor1;
 
-        const totalRooms = floorNumber === 5 ? 1 : 3;
+        // ⬅️ Le boss (1 salle) est maintenant à l'étage 4
+        const totalRooms = floorNumber === 4 ? 1 : 3;
         const order      = this.getRoomOrder(floorNumber, totalRooms);
         const mappedIndex  = order[roomIndex] ?? roomIndex;
         const runPosition  = roomIndex + 1; // 1, 2 ou 3

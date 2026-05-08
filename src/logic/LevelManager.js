@@ -83,8 +83,6 @@ export class LevelManager {
         // ─────────────────────────────────────────────────────────
         this.spawnProtectionTime = Date.now() + 500;
 
-        console.log(`🎮 Player spawned at (${spawnPos.x.toFixed(1)}, ${spawnPos.y.toFixed(1)}, ${spawnPos.z.toFixed(1)})`);
-        console.log(`🛡️ Spawn protection: 500ms`);
     }
 
     /**
@@ -132,7 +130,6 @@ export class LevelManager {
             FloorGenerator.resetAllOrders();
         }
 
-        console.log(`--- CHARGEMENT ÉTAGE ${floorNumber}: ${this.currentFloorConfig.name} ---`);
 
         if (this.light) {
             this.light.intensity = this.currentFloorConfig.theme.ambientIntensity;
@@ -149,6 +146,11 @@ export class LevelManager {
         this.currentRoomIndex = roomIndex;
         this.currentFloorConfig = FloorConfig.getFloor(this.currentFloor);
         this.roomClearedTriggered = false;
+
+        // ✅ Nettoyage de la salle précédente avant de charger la suivante
+        if (this.currentRoom) {
+            this.roomManager.clearRoom();
+        }
 
         this.currentRoom = FloorGenerator.generateRoom(
             this.currentFloor,
@@ -257,7 +259,6 @@ export class LevelManager {
         // MINI-BOSS FLOOR 3 — dernière salle (roomIndex 2)
         // ─────────────────────────────────────────────
         if (this.currentFloor === 3 && this.currentRoomIndex === 2) {
-            console.log("⚠️ MINI-BOSS F3: SentinelleElite incoming!");
             const bossPos = this.currentRoom.spawnPosition.clone();
             bossPos.y = 1;
             this.entityManager.spawnEnemy("SentinelleElite", bossPos);
@@ -268,7 +269,6 @@ export class LevelManager {
         // MINI-BOSS FLOOR 4 — dernière salle (roomIndex 2)
         // ─────────────────────────────────────────────
         if (this.currentFloor === 4 && this.currentRoomIndex === 2) {
-            console.log("⚠️ MINI-BOSS F4: Tank incoming!");
             const bossPos = this.currentRoom.spawnPosition.clone();
             bossPos.y = 1;
             this.entityManager.spawnEnemy("Tank", bossPos);

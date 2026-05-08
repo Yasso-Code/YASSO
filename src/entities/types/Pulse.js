@@ -1,557 +1,495 @@
 import { Enemy } from "../Enemy.js";
-import { MeshBuilder, StandardMaterial, Color3, Vector3, Ray } from "@babylonjs/core";
+import { MeshBuilder, StandardMaterial, Color3, Vector3, DynamicTexture } from "@babylonjs/core";
 
 /**
  * @class Pulse
  * ─────────────────────────────────────────────────────────────
- * MACHINE À ÉTATS (style Hadès)
+ * POSEUR DE MINES — force le joueur à surveiller le sol.
+ *
+ * MACHINE À ÉTATS :
+ *   ROAM       → patrouille passive tant que le joueur est loin
+ *   KITE       → maintient une distance idéale + strafe + pose mines
+ *   FLEE       → fuite d'urgence si le joueur est trop proche
+ *   REPOSITION → déplacement latéral après une fuite
+ *
+ * DIFFÉRENCE AVEC Sentinelle :
+ *   La Sentinelle tient une ligne de tir fixe.
+ *   Le Pulse se déplace constamment en kite et pollue le sol.
+ *   Associés, ils créent une pression croisée : projectiles + mines.
+ *
+ * OPTIMISATION :
+ *   Utilise Room.isValidPosition() (Set O(1)) au lieu de Raycast
+ *   pour valider chaque déplacement.
  * ─────────────────────────────────────────────────────────────
  */
 export class Pulse extends Enemy {
     constructor(scene, position) {
         super(scene, "Pulse", position);
 
-        // Caractéristiques de base
-        this.hp = 3;
-        this.speed = 0.06;
+        // ─────────────────────────────
+        // STATS
+        // ─────────────────────────────
+        this.hp    = 3;
+        this.maxHp = 3;
+        this.speed = 0.10; // légèrement plus rapide que l'original
 
-        // Zones de détection
-        this.detectionRange = 20;  // Distance pour entrer en KITE
-        this.loseRange = 28;       // Distance pour perdre le joueur (retour ROAM)
-        this.kiteMin = 7;           // Trop proche → reculer
-        this.kiteMax = 14;          // Trop loin → avancer
-        this.fleeRange = 5;         // Urgence absolue
+        // ─────────────────────────────
+        // ZONES DE DÉTECTION
+        // ─────────────────────────────
+        this.detectionRange = 20; // Distance pour passer en KITE
+        this.loseRange      = 30; // Distance pour repasser en ROAM
+        this.kiteMin        = 8;  // Trop proche → reculer
+        this.kiteMax        = 16; // Trop loin   → avancer
+        this.fleeRange      = 4;  // Urgence absolue
 
-        // Machine à états
-        this.state = 'ROAM';
-        this.stateTimer = 0;
-        this.fleeDuration = 40;         // Frames de fuite
-        this.repositionDuration = 60;   // Frames de repositionnement
+        // ─────────────────────────────
+        // MACHINE À ÉTATS
+        // ─────────────────────────────
+        this.state              = 'ROAM';
+        this.stateTimer         = 0;
+        this.fleeDuration       = 35;
+        this.repositionDuration = 50;
 
-        // Patrouille (ROAM)
+        // ─────────────────────────────
+        // PATROUILLE (ROAM)
+        // ─────────────────────────────
         this.roamTarget = null;
-        this.roamTimer = 0;
-        this.roamRadius = 8;            // Rayon de patrouille
+        this.roamTimer  = 0;
+        this.roamRadius = 6;
 
-        // Strafe (KITE)
-        this.strafeDir = Math.random() < 0.5 ? 1 : -1;
-        this.strafeSwitchTimer = 0;
-        this.strafeSwitchInterval = 90; // Changer de direction toutes les ~1.5s
+        // ─────────────────────────────
+        // STRAFE (KITE)
+        // ─────────────────────────────
+        this.strafeDir           = Math.random() < 0.5 ? 1 : -1;
+        this.strafeSwitchTimer   = 0;
+        this.strafeSwitchInterval = 80;
 
-        // Mines
-        this.mineCooldown = 0;
-        this.mineInterval = 150;        // ~2.5s à 60fps
-        this.maxMines = 4;
-        this.mines = [];
+        // ─────────────────────────────
+        // MINES
+        // ─────────────────────────────
+        this.mineCooldown = 60;       // Délai initial avant la 1ère mine
+        this.mineInterval = 140;      // ~2.3s à 60fps
+        this.maxMines     = 4;
+        this.mines        = [];
 
-        // Anti-fusion entre pulses
+        // ─────────────────────────────
+        // ANTI-FUSION
+        // ─────────────────────────────
         this.separationDistance = 3;
-        this.separationForce = 0.4;
+        this.separationForce    = 0.4;
 
-        // Animation
-        this.pulsePhase = Math.random() * Math.PI * 2;
+        // ─────────────────────────────
+        // ANIMATION VISUELLE
+        // ─────────────────────────────
+        this.pulsePhase       = Math.random() * Math.PI * 2;
         this.ringRotationSpeed = 0.04;
-        this.pulseAmplitude = 0.12;
+        this.pulseAmplitude   = 0.12;
+
+        // ✅ _initBase après les stats — hp=3 est déjà défini
+        this._initBase(position);
     }
 
-    // ──────────────────────────────────────────────────────────
-    // CRÉATION DU MESH
-    // ──────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    //  MESH & MATÉRIAUX
+    // ══════════════════════════════════════════════════════════════
+
     _createMesh() {
-        // Cœur principal (sphère)
         const core = MeshBuilder.CreateSphere("pulse_core", {
-            diameter: 1.2,
-            segments: 16
+            diameter: 1.2, segments: 12
         }, this.scene);
 
-        // Anneau tournant autour
         const ring = MeshBuilder.CreateTorus("pulse_ring", {
-            diameter: 2.2,
-            thickness: 0.18,
-            tessellation: 24
+            diameter: 2.0, thickness: 0.15, tessellation: 20
         }, this.scene);
-
-        ring.parent = core;
-        ring.rotation.x = Math.PI / 2; // Anneau horizontal
-
-        // Stocker la référence
+        ring.parent   = core;
+        ring.rotation.x = Math.PI / 2;
         this._ring = ring;
 
         return core;
     }
 
-    // ──────────────────────────────────────────────────────────
-    // MATÉRIAUX
-    // ──────────────────────────────────────────────────────────
     _applyMaterial() {
-        // Matériau du cœur (cyan pulsant)
         const coreMat = new StandardMaterial("pulseCoreMat", this.scene);
-        coreMat.emissiveColor = new Color3(0, 0.8, 1);
-        coreMat.diffuseColor = new Color3(0, 0.2, 0.3);
+        coreMat.emissiveColor = new Color3(0, 0.8, 1);   // Cyan
         this.mesh.material = coreMat;
 
-        // Matériau de l'anneau (violet)
         if (this._ring) {
             const ringMat = new StandardMaterial("pulseRingMat", this.scene);
-            ringMat.emissiveColor = new Color3(0.6, 0, 1);
-            ringMat.diffuseColor = new Color3(0.2, 0, 0.3);
+            ringMat.emissiveColor = new Color3(0.6, 0, 1); // Violet
             this._ring.material = ringMat;
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // HAUTEUR DU SOL (raycast)
-    // ──────────────────────────────────────────────────────────
-    _getGroundHeight(position) {
-        const rayOrigin = new Vector3(position.x, 10, position.z);
-        const rayDirection = new Vector3(0, -1, 0);
-        const ray = new Ray(rayOrigin, rayDirection, 15);
+    // ══════════════════════════════════════════════════════════════
+    //  VALIDATION DE POSITION — O(1) via Room (pas de Raycast)
+    // ══════════════════════════════════════════════════════════════
 
-        const hit = this.scene.pickWithRay(ray, (mesh) => mesh.name === "p");
-
-        if (hit?.hit) {
-            return hit.pickedPoint.y + 0.4; // Légère élévation
+    _isValidPosition(targetPosition, entityManager) {
+        if (entityManager?.levelManager?.currentRoom) {
+            return entityManager.levelManager.currentRoom.isValidPosition(
+                targetPosition.x, targetPosition.z
+            );
         }
-        return null;
+        return true; // fallback permissif
     }
 
-    // ──────────────────────────────────────────────────────────
-    // MOUVEMENT AVEC ADAPTATION AU SOL
-    // ──────────────────────────────────────────────────────────
-    _moveTo(targetPosition) {
-        const groundY = this._getGroundHeight(targetPosition);
+    // ══════════════════════════════════════════════════════════════
+    //  MOUVEMENT SIMPLIFIÉ (plus de Raycast pour le sol)
+    // ══════════════════════════════════════════════════════════════
 
-        if (groundY !== null) {
+    _moveTo(targetPosition, entityManager) {
+        if (this._isValidPosition(targetPosition, entityManager)) {
             this.mesh.position.x = targetPosition.x;
             this.mesh.position.z = targetPosition.z;
-            this.mesh.position.y = groundY + 1.0; // Flotte au-dessus du sol
+            this.mesh.position.y = 1; // hauteur fixe comme Traqueur
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // ANTI-FUSION ENTRE PULSES
-    // ──────────────────────────────────────────────────────────
-    _getSeparationVector(entityManager) {
-        const separation = Vector3.Zero();
+    // ══════════════════════════════════════════════════════════════
+    //  ANTI-FUSION
+    // ══════════════════════════════════════════════════════════════
 
-        if (!entityManager?.enemies) return separation;
+    _getSeparationVector(entityManager) {
+        const sep = Vector3.Zero();
+        if (!entityManager?.enemies) return sep;
 
         entityManager.enemies.forEach(other => {
-            // Ignorer soi-même, les ennemis détruits ou sans mesh
             if (other === this || !other.mesh || other.isDestroyed) return;
-
-            const distance = Vector3.Distance(this.mesh.position, other.mesh.position);
-
-            if (distance < this.separationDistance && distance > 0.01) {
-                const direction = this.mesh.position.subtract(other.mesh.position).normalize();
-                const force = (1 / distance) * this.separationForce;
-                separation.addInPlace(direction.scale(force));
+            const dist = Vector3.Distance(this.mesh.position, other.mesh.position);
+            if (dist < this.separationDistance && dist > 0.01) {
+                const dir   = this.mesh.position.subtract(other.mesh.position).normalize();
+                const force = Math.min(1 / dist, 2) * this.separationForce;
+                sep.addInPlace(dir.scale(force));
             }
         });
 
-        return separation;
+        return sep;
     }
 
-    // ──────────────────────────────────────────────────────────
-    // CIBLE DE PATROUILLE ALÉATOIRE
-    // ──────────────────────────────────────────────────────────
-    _generateRoamTarget() {
-        const angle = Math.random() * Math.PI * 2;
-        const distance = this.roamRadius * (0.5 + Math.random() * 0.5);
+    // ══════════════════════════════════════════════════════════════
+    //  ANIMATION VISUELLE
+    // ══════════════════════════════════════════════════════════════
 
-        return this.mesh.position.add(new Vector3(
-            Math.cos(angle) * distance,
-            0,
-            Math.sin(angle) * distance
-        ));
-    }
-
-    // ──────────────────────────────────────────────────────────
-    // CHANGEMENT D'ÉTAT
-    // ──────────────────────────────────────────────────────────
-    _setState(newState) {
-        if (this.state === newState) return;
-
-        // Nettoyage à la sortie d'un état
-        if (this.state === 'ROAM') {
-            this.roamTarget = null;
-        }
-
-        this.state = newState;
-        this.stateTimer = 0;
-
-        // Initialisation à l'entrée d'un état
-        if (newState === 'REPOSITION') {
-            // Garde la même direction de strafe
-        }
-    }
-
-    // ──────────────────────────────────────────────────────────
-    // ANIMATION VISUELLE
-    // ──────────────────────────────────────────────────────────
     _animatePulse() {
         this.pulsePhase += 0.08;
-
-        // Pulsation du cœur
         const scale = 1 + Math.sin(this.pulsePhase) * this.pulseAmplitude;
         this.mesh.scaling.setAll(scale);
-
-        // Rotation de l'anneau
-        if (this._ring) {
-            this._ring.rotation.z += this.ringRotationSpeed;
-        }
+        if (this._ring) this._ring.rotation.z += this.ringRotationSpeed;
     }
 
-    // ──────────────────────────────────────────────────────────
-    // LOGIQUE DE PATROUILLE (ROAM)
-    // ──────────────────────────────────────────────────────────
-    _updateRoam() {
+    // ══════════════════════════════════════════════════════════════
+    //  CHANGEMENT D'ÉTAT
+    // ══════════════════════════════════════════════════════════════
+
+    _setState(newState) {
+        if (this.state === newState) return;
+        if (this.state === 'ROAM') this.roamTarget = null;
+        this.state      = newState;
+        this.stateTimer = 0;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  ÉTATS
+    // ══════════════════════════════════════════════════════════════
+
+    _updateRoam(entityManager) {
         this.roamTimer--;
 
-        // Nouvelle cible si nécessaire
         if (this.roamTimer <= 0 || !this.roamTarget) {
-            this.roamTarget = this._generateRoamTarget();
-            this.roamTimer = 150 + Math.floor(Math.random() * 100); // ~2.5-4s
+            const angle    = Math.random() * Math.PI * 2;
+            const dist     = this.roamRadius * (0.5 + Math.random() * 0.5);
+            this.roamTarget = this.mesh.position.add(new Vector3(
+                Math.cos(angle) * dist, 0, Math.sin(angle) * dist
+            ));
+            this.roamTimer = 120 + Math.floor(Math.random() * 80);
         }
 
-        // Se déplacer vers la cible
         if (this.roamTarget) {
             const toTarget = this.roamTarget.subtract(this.mesh.position);
-            const distance = toTarget.length();
-
-            if (distance > 0.5) {
-                const direction = toTarget.normalize();
-                const move = direction.scale(this.speed * 0.5);
-                this._moveTo(this.mesh.position.add(move));
+            if (toTarget.length() > 0.5) {
+                const move = toTarget.normalize().scale(this.speed * 0.4);
+                this._moveTo(this.mesh.position.add(move), entityManager);
             } else {
-                // Cible atteinte
                 this.roamTarget = null;
             }
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // LOGIQUE DE KITE (état principal)
-    // ──────────────────────────────────────────────────────────
-    _updateKite(toPlayer, towardDir, awayDir, lateralDir, distance) {
+    _updateKite(towardDir, awayDir, lateralDir, distance, entityManager) {
         // Changer de direction de strafe périodiquement
         this.strafeSwitchTimer--;
         if (this.strafeSwitchTimer <= 0) {
-            this.strafeDir *= -1;
-            this.strafeSwitchTimer = this.strafeSwitchInterval + Math.floor(Math.random() * 30);
+            this.strafeDir         *= -1;
+            this.strafeSwitchTimer  = this.strafeSwitchInterval + Math.floor(Math.random() * 30);
         }
 
-        // Direction latérale (strafe)
         const strafe = lateralDir.scale(this.strafeDir * this.speed);
-
         let move;
 
         if (distance < this.kiteMin) {
-            // Trop proche → reculer avec strafe léger
+            // Trop proche → recule + léger strafe
             move = awayDir.scale(this.speed).add(strafe.scale(0.3));
-        }
-        else if (distance > this.kiteMax) {
-            // Trop loin → avancer vers le joueur avec strafe
+        } else if (distance > this.kiteMax) {
+            // Trop loin → avance doucement + strafe
             move = towardDir.scale(this.speed * 0.5).add(strafe.scale(0.7));
-        }
-        else {
+        } else {
             // Zone idéale → strafe pur
             move = strafe;
         }
 
-        // Application du mouvement
         if (move.length() > 0.001) {
-            this._moveTo(this.mesh.position.add(move));
+            this._moveTo(this.mesh.position.add(move), entityManager);
         }
 
-        // Pose de mines en KITE
         this._tryDropMine();
     }
 
-    // ──────────────────────────────────────────────────────────
-    // LOGIQUE DE FLEE (fuite d'urgence)
-    // ──────────────────────────────────────────────────────────
-    _updateFlee(awayDir) {
-        // Fuite rapide
-        const move = awayDir.scale(this.speed * 1.5);
-        this._moveTo(this.mesh.position.add(move));
+    _updateFlee(awayDir, entityManager) {
+        const move = awayDir.scale(this.speed * 1.6);
+        this._moveTo(this.mesh.position.add(move), entityManager);
 
-        // Pose une mine de panique plus souvent
+        // Pose une mine de panique
         if (this.mineCooldown <= 0 && this.mines.length < this.maxMines) {
             this._dropMine();
-            this.mineCooldown = this.mineInterval * 0.6; // Cooldown réduit en fuite
+            this.mineCooldown = Math.floor(this.mineInterval * 0.5);
+        } else {
+            this.mineCooldown--;
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // LOGIQUE DE REPOSITION (latéral)
-    // ──────────────────────────────────────────────────────────
-    _updateReposition(lateralDir) {
-        const move = lateralDir.scale(this.strafeDir * this.speed * 0.8);
-        this._moveTo(this.mesh.position.add(move));
+    _updateReposition(lateralDir, entityManager) {
+        const move = lateralDir.scale(this.strafeDir * this.speed * 0.7);
+        this._moveTo(this.mesh.position.add(move), entityManager);
     }
 
-    // ──────────────────────────────────────────────────────────
-    // TENTATIVE DE POSE DE MINE
-    // ──────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    //  MINES
+    // ══════════════════════════════════════════════════════════════
+
     _tryDropMine() {
         this.mineCooldown--;
-
         if (this.mineCooldown <= 0 && this.mines.length < this.maxMines) {
             this._dropMine();
             this.mineCooldown = this.mineInterval;
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // POSE D'UNE MINE
-    // ──────────────────────────────────────────────────────────
     _dropMine() {
-        // Position aléatoire autour du Pulse
         const offset = new Vector3(
-            (Math.random() - 0.5) * 3,
-            0,
-            (Math.random() - 0.5) * 3
+            (Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3
         );
+        const minePos = this.mesh.position.clone().add(offset);
+        minePos.y = 0.05; // Posée au sol, quasi plate
 
-        const minePosition = this.mesh.position.add(offset);
-        const groundY = this._getGroundHeight(minePosition);
-
-        if (groundY === null) return;
-
-        // Création de la mine
-        const mine = MeshBuilder.CreateBox("pulse_mine", {
-            size: 0.7,
-            faceColors: [
-                new Color3(1, 0.2, 1),
-                new Color3(1, 0.2, 1),
-                new Color3(1, 0.2, 1),
-                new Color3(1, 0.2, 1),
-                new Color3(1, 0.2, 1),
-                new Color3(1, 0.2, 1)
-            ]
+        // ── Plan plat au sol (remplace le cube) ──────────────────
+        const mine = MeshBuilder.CreateGround("pulse_mine", {
+            width: 2.5, height: 2.5  // ⬆️ Plus grande que l'ancien cube 0.7
         }, this.scene);
+        mine.position = minePos;
+        mine.rotation.y = Math.random() * Math.PI; // Orientation aléatoire
 
-        mine.position.x = minePosition.x;
-        mine.position.y = groundY;
-        mine.position.z = minePosition.z;
+        // ── Toile d'araignée via DynamicTexture ──────────────────
+        const texSize = 256;
+        const tex = new DynamicTexture("mineTex_" + Date.now(), { width: texSize, height: texSize }, this.scene, false);
+        const ctx = tex.getContext();
 
-        // Matériau émissif
+        // Fond transparent
+        ctx.clearRect(0, 0, texSize, texSize);
+
+        const cx = texSize / 2, cy = texSize / 2;
+        const rings  = 4;    // Nombre d'anneaux concentriques
+        const spokes = 8;    // Nombre de fils radiaux
+        const maxR   = texSize * 0.45;
+
+        ctx.strokeStyle = "rgba(200, 0, 255, 0.9)"; // Magenta violet
+        ctx.lineWidth   = 1.5;
+
+        // Fils radiaux (du centre vers l'extérieur)
+        for (let i = 0; i < spokes; i++) {
+            const angle = (i / spokes) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(angle) * maxR, cy + Math.sin(angle) * maxR);
+            ctx.stroke();
+        }
+
+        // Anneaux concentriques avec fils en zigzag (style toile)
+        for (let r = 1; r <= rings; r++) {
+            const radius = (r / rings) * maxR;
+            ctx.beginPath();
+            for (let i = 0; i <= spokes; i++) {
+                const angle = (i / spokes) * Math.PI * 2;
+                const x = cx + Math.cos(angle) * radius;
+                const y = cy + Math.sin(angle) * radius;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // Point central lumineux
+        ctx.fillStyle = "rgba(255, 50, 255, 1.0)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        tex.update();
+
         const mat = new StandardMaterial("mineMat_" + Date.now(), this.scene);
-        mat.emissiveColor = new Color3(1, 0.1, 1);
-        mat.diffuseColor = new Color3(0.5, 0, 0.5);
+        mat.diffuseTexture  = tex;
+        mat.emissiveTexture = tex;
+        mat.disableLighting = true;
+        mat.backFaceCulling = false;
+        mat.useAlphaFromDiffuseTexture = true;
         mine.material = mat;
 
-        // Métadonnées pour l'animation
         mine.metadata = {
-            pulsePhase: Math.random() * Math.PI * 2,
-            rotationY: 0,
-            lifetime: 0,
-            maxLifetime: 480, // 8s à 60fps
-            isDying: false,
+            pulsePhase:   Math.random() * Math.PI * 2,
+            lifetime:     0,
+            maxLifetime:  480,
+            isDying:      false,
             fadeProgress: 0,
-            fadeDuration: 180, // 3s de fadeout
-            observer: null
+            fadeDuration: 120,
+            observer:     null,
+            tex           // référence pour dispose propre
         };
 
         this.mines.push(mine);
     }
 
-    // ──────────────────────────────────────────────────────────
-    // MISE À JOUR D'UNE MINE
-    // ──────────────────────────────────────────────────────────
     _updateMine(mine, player) {
         if (!mine || mine.isDisposed()) return;
 
         const meta = mine.metadata;
-
-        // Animation
-        meta.pulsePhase += 0.12;
-        meta.rotationY += 0.04;
+        meta.pulsePhase += 0.08;
         meta.lifetime++;
 
-        // Pulsation visuelle
-        const pulseScale = 1 + Math.sin(meta.pulsePhase) * 0.2;
-        mine.scaling.setAll(pulseScale);
+        // Pulsation via opacité plutôt que scaling (plan plat — pas de déformation)
+        if (mine.material) {
+            mine.material.alpha = 0.6 + Math.sin(meta.pulsePhase) * 0.3;
+        }
+        // Légère rotation pour effet vivant
+        mine.rotation.y += 0.01;
 
-        // Rotation lente
-        mine.rotation.y = meta.rotationY;
-
-        // Gestion du fadeout
+        // Fadeout
         if (meta.isDying) {
             meta.fadeProgress++;
-            const alpha = 1 - (meta.fadeProgress / meta.fadeDuration);
-
             if (mine.material) {
-                mine.material.alpha = Math.max(0, alpha);
+                mine.material.alpha = Math.max(0, 1 - meta.fadeProgress / meta.fadeDuration);
             }
-
             if (meta.fadeProgress >= meta.fadeDuration) {
-                // Nettoyer l'observer si existe
                 if (meta.observer) {
                     this.scene.onBeforeRenderObservable.remove(meta.observer);
                     meta.observer = null;
                 }
+                if (meta.tex) meta.tex.dispose();
                 mine.dispose();
-                return;
             }
+            return;
         }
 
-        // Collision avec le joueur (seulement si la mine n'est pas en train de disparaître)
-        if (!meta.isDying && player?.mesh && player.mesh.intersectsMesh(mine, false)) {
+        // Collision joueur
+        if (player?.mesh && player.mesh.intersectsMesh(mine, false)) {
             player.takeDamage();
-
-            if (meta.observer) {
-                this.scene.onBeforeRenderObservable.remove(meta.observer);
-                meta.observer = null;
-            }
-
+            if (meta.tex) meta.tex.dispose();
             mine.dispose();
             return;
         }
 
-        // Fin de vie naturelle → entame le fadeout
-        if (meta.lifetime >= meta.maxLifetime && !meta.isDying) {
+        // Fin de vie → fadeout
+        if (meta.lifetime >= meta.maxLifetime) {
             meta.isDying = true;
-            meta.fadeProgress = 0;
-
-            if (mine.material) {
-                mine.material.needDepthPrePass = true;
-            }
+            if (mine.material) mine.material.needDepthPrePass = true;
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // MISE À JOUR DE TOUTES LES MINES
-    // ──────────────────────────────────────────────────────────
     _updateMines(player) {
         for (let i = this.mines.length - 1; i >= 0; i--) {
             const mine = this.mines[i];
-
-            if (!mine || mine.isDisposed()) {
-                this.mines.splice(i, 1);
-                continue;
-            }
-
+            if (!mine || mine.isDisposed()) { this.mines.splice(i, 1); continue; }
             this._updateMine(mine, player);
-
-            if (mine.isDisposed()) {
-                this.mines.splice(i, 1);
-            }
+            if (mine.isDisposed()) this.mines.splice(i, 1);
         }
     }
 
-    // ──────────────────────────────────────────────────────────
-    // IA PRINCIPALE
-    // ──────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    //  IA PRINCIPALE
+    // ══════════════════════════════════════════════════════════════
+
     think(player, entityManager, aiCollector) {
         if (this.isDestroyed || !player?.mesh) return;
 
-        // Vecteurs de base
-        const toPlayer = player.mesh.position.subtract(this.mesh.position);
-        const distance = toPlayer.length();
-
-        // Éviter les divisions par zéro
+        const toPlayer  = player.mesh.position.subtract(this.mesh.position);
+        const distance  = toPlayer.length();
         if (distance < 0.001) return;
 
-        const towardDir = toPlayer.normalize();
-        const awayDir = towardDir.scale(-1);
+        const towardDir  = toPlayer.normalize();
+        const awayDir    = towardDir.scale(-1);
         const lateralDir = new Vector3(-towardDir.z, 0, towardDir.x).normalize();
 
-        // Animation continue
         this._animatePulse();
         this.stateTimer++;
 
-        // ─── TRANSITIONS D'ÉTAT ────────────────────────────────
+        // ── TRANSITIONS ─────────────────────────────────────────
         switch (this.state) {
             case 'ROAM':
-                if (distance < this.detectionRange) {
-                    this._setState('KITE');
-                }
+                if (distance < this.detectionRange) this._setState('KITE');
                 break;
-
             case 'KITE':
-                if (distance < this.fleeRange) {
-                    this._setState('FLEE');
-                } else if (distance > this.loseRange) {
-                    this._setState('ROAM');
-                }
+                if (distance < this.fleeRange)      this._setState('FLEE');
+                else if (distance > this.loseRange) this._setState('ROAM');
                 break;
-
             case 'FLEE':
-                if (this.stateTimer >= this.fleeDuration) {
-                    this._setState('REPOSITION');
-                }
+                if (this.stateTimer >= this.fleeDuration) this._setState('REPOSITION');
                 break;
-
             case 'REPOSITION':
-                if (this.stateTimer >= this.repositionDuration) {
-                    this._setState('KITE');
-                } else if (distance < this.fleeRange) {
-                    this._setState('FLEE'); // Re-fuite si toujours trop proche
-                }
+                if (this.stateTimer >= this.repositionDuration) this._setState('KITE');
+                else if (distance < this.fleeRange)             this._setState('FLEE');
                 break;
         }
 
-        // ─── EXÉCUTION DE L'ÉTAT ───────────────────────────────
+        // ── EXÉCUTION ───────────────────────────────────────────
         switch (this.state) {
-            case 'ROAM':
-                this._updateRoam();
-                break;
-
-            case 'KITE':
-                this._updateKite(toPlayer, towardDir, awayDir, lateralDir, distance);
-                break;
-
-            case 'FLEE':
-                this._updateFlee(awayDir);
-                break;
-
-            case 'REPOSITION':
-                this._updateReposition(lateralDir);
-                break;
+            case 'ROAM':        this._updateRoam(entityManager); break;
+            case 'KITE':        this._updateKite(towardDir, awayDir, lateralDir, distance, entityManager); break;
+            case 'FLEE':        this._updateFlee(awayDir, entityManager); break;
+            case 'REPOSITION':  this._updateReposition(lateralDir, entityManager); break;
         }
 
-        // Anti-fusion entre pulses
-        const separation = this._getSeparationVector(entityManager);
-        if (separation.length() > 0.01) {
-            const currentPos = this.mesh.position;
-            this._moveTo(currentPos.add(separation));
+        // Anti-fusion
+        const sep = this._getSeparationVector(entityManager);
+        if (sep.length() > 0.01) {
+            this._moveTo(this.mesh.position.add(sep), entityManager);
         }
 
-        // Mise à jour des mines
+        // Rotation face au joueur
+        this.mesh.rotation.y = Math.atan2(towardDir.x, towardDir.z);
+
         this._updateMines(player);
     }
 
-    // ──────────────────────────────────────────────────────────
-    // NETTOYAGE À LA MORT
-    // ──────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    //  NETTOYAGE
+    // ══════════════════════════════════════════════════════════════
+
     dispose() {
         if (this.isDestroyed) return;
 
-        // Rendre les mines orphelines (elles continuent de vivre)
+        // Les mines deviennent orphelines et s'effacent en fadeout
         this.mines.forEach(mine => {
             if (mine.isDisposed() || !mine.metadata) return;
-
-            // Déclencher le fadeout
             mine.metadata.isDying = true;
             mine.metadata.fadeProgress = 0;
+            if (mine.material) mine.material.needDepthPrePass = true;
 
-            if (mine.material) {
-                mine.material.needDepthPrePass = true;
-            }
-
-            // Attacher un observer pour continuer la mise à jour sans le Pulse
             const observer = this.scene.onBeforeRenderObservable.add(() => {
-                this._updateMine(mine, null); // null = pas de dégâts joueur
+                this._updateMine(mine, null);
             });
-
             mine.metadata.observer = observer;
         });
 
-        // Vider le tableau sans disposer (les mines sont orphelines)
         this.mines = [];
-
         super.dispose();
     }
 }

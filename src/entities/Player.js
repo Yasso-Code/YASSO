@@ -15,14 +15,14 @@ export class Player {
         this.baseSpeed = 0.28; // ⬆️ Augmenté de 0.18 à 0.28 pour plus de fluidité
         this.speed = this.baseSpeed;
         this.lastMoveDirection = new Vector3(0, 0, 1);
-        
+
         // Dash
         this.isDashing = false;
         this.isDashReady = true;
         this.dashCooldown = 400; // ⬇️ Réduit de 800ms à 400ms pour spammer le dash
         this.dashDistance = 5.0; // ⬆️ Augmenté de 3.5 à 5.0 pour couvrir plus de terrain
         this.dashDuration = 12;  // ⬇️ Durée animation réduite (frames) pour sensation instantanée
-        
+
         this.currentDashAnim = null;
 
         // Système de vie
@@ -37,15 +37,9 @@ export class Player {
         this.powerTimer = 0;
 
         this.audioManager = null;
-    }
 
-    _applyPowerVisual(type) {
-        if (type === "Traqueur") {
-            this.speed = this.baseSpeed * 1.5;
-            this.activePower = "Traqueur";
-            this.powerTimer = Infinity;
-            if (this.mesh) this.mesh.material.emissiveColor = new Color3(1, 0, 0);
-        }
+        // Anti double-hit : ennemis récemment touchés (cooldown par ennemi)
+        this._recentlyHitEnemies = new Set();
     }
 
     setAudioManager(audioManager) {
@@ -86,8 +80,12 @@ export class Player {
         this.resetMovement();
         this.currentHealth = this.maxHealth;
         this.isInvincible = false;
-        this.mesh.material.alpha = 0.8;
+        this.activePower = null;
         this.storedPower = null;
+        this.powerTimer = 0;
+        this.speed = this.baseSpeed;
+        this.mesh.material.alpha = 0.8;
+        this.mesh.material.emissiveColor = new Color3(0, 1, 1);
     }
 
     // ─────────────────────────────────────────────
@@ -122,7 +120,7 @@ export class Player {
         if (levelManager && levelManager.currentRoom) {
             return levelManager.currentRoom.isValidPosition(targetPosition.x, targetPosition.z);
         }
-        
+
         // Fallback Raycast si LevelManager non dispo (ne devrait pas arriver in-game)
         const rayOriginY = this.mesh.position.y + 4;
         const origin = new Vector3(targetPosition.x, rayOriginY, targetPosition.z);
@@ -167,7 +165,7 @@ export class Player {
 
         // Calcul du vecteur de mouvement
         if (Math.abs(input.x) > 0 || Math.abs(input.z) > 0) {
-            
+
             // ✅ CORRECTION : Mouvement relatif à la caméra
             if (this.scene.activeCamera) {
                 // Récupérer le vecteur "avant" de la caméra projeté au sol
@@ -228,13 +226,20 @@ export class Player {
     _activateInvincibility() {
         this.isInvincible = true;
 
+        // Annuler un éventuel intervalle précédent (double-hit)
+        if (this._invincibilityInterval) {
+            clearInterval(this._invincibilityInterval);
+            this._invincibilityInterval = null;
+        }
+
         let blinkCount = 0;
-        const blinkInterval = setInterval(() => {
+        this._invincibilityInterval = setInterval(() => {
             this.mesh.material.alpha = this.mesh.material.alpha === 0.8 ? 0.3 : 0.8;
             blinkCount++;
 
             if (blinkCount >= 10) {
-                clearInterval(blinkInterval);
+                clearInterval(this._invincibilityInterval);
+                this._invincibilityInterval = null;
                 this.mesh.material.alpha = 0.8;
                 this.isInvincible = false;
                 console.log("Invincibility ended");
@@ -250,6 +255,7 @@ export class Player {
 
         this.isDashReady = false;
         this.isDashing = true;
+        this._recentlyHitEnemies.clear(); // Nouveau dash → reset des cooldowns de hit
         aiCollector.recordDash();
 
         if (this.audioManager) this.audioManager.playSound("dash");
@@ -345,11 +351,10 @@ export class Player {
 
     deactivatePower() {
         if (!this.activePower) return;
-        // DEBUG : power rouge permanent — ne pas désactiver
-        if (this.powerTimer === Infinity) return;
 
         console.log("POWER UP ENDED");
         this.activePower = null;
+        this.powerTimer = 0;
         this.speed = this.baseSpeed;
         this.mesh.material.emissiveColor = new Color3(0, 1, 1);
     }
@@ -369,6 +374,19 @@ export class Player {
         particleSystem.start();
 
         if (this.audioManager) this.audioManager.playSound("explosion");
+    }
+
+    // ─────────────────────────────────────────────
+    // ANTI DOUBLE-HIT
+    // ─────────────────────────────────────────────
+    /**
+     * Vérifie si cet ennemi peut être touché ce dash.
+     * Retourne false si déjà touché, true et l'enregistre sinon.
+     */
+    canHitEnemy(enemy) {
+        if (this._recentlyHitEnemies.has(enemy)) return false;
+        this._recentlyHitEnemies.add(enemy);
+        return true;
     }
 
     // ─────────────────────────────────────────────
