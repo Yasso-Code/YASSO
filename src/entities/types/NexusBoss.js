@@ -26,6 +26,9 @@ export class NexusBoss extends Enemy {
 
         // Attaques
         this.projectiles = [];
+
+        // ✅ L'initialisation du mesh manquante ajoutée ici :
+        this._initBase(position);
     }
 
     /**

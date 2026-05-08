@@ -52,15 +52,15 @@ export class FloorGenerator {
      * getEnemyTypesForRoom() est supprimé — la palette vit dans chaque Floor.
      */
     static generateRoom(floorNumber, roomIndex, roomType, aiData = null) {
-        // ⬅️ Astuce : quand le jeu demande l'étage 4, on lui donne Floor5
+        // Quand le jeu demande l'étage 4, on injecte la logique du Floor5 (le Boss)
         const floorModules = { 1: Floor1, 2: Floor2, 3: Floor3, 4: Floor5 };
         const module = floorModules[floorNumber] || Floor1;
 
-        // ⬅️ Le boss (1 salle) est maintenant à l'étage 4
-        const totalRooms = floorNumber === 4 ? 1 : 3;
+        // L'étage 4 (Boss) a 1 salle, les autres en ont 3
+        const totalRooms = (floorNumber === 4) ? 1 : 3;
         const order      = this.getRoomOrder(floorNumber, totalRooms);
         const mappedIndex  = order[roomIndex] ?? roomIndex;
-        const runPosition  = roomIndex + 1; // 1, 2 ou 3
+        const runPosition  = roomIndex + 1;
 
         const room = new Room({
             floorNumber,
@@ -69,7 +69,6 @@ export class FloorGenerator {
             difficulty: this._calculateDifficulty(floorNumber, roomIndex)
         });
 
-        // runPosition transmis explicitement → chaque Floor pilote budget + palette
         module.generate(room, mappedIndex, runPosition, aiData);
 
         room.mappedRoomIndex = mappedIndex;

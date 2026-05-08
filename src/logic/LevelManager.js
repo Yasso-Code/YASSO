@@ -182,18 +182,17 @@ export class LevelManager {
 
         const isLastRoom = (roomIndex === config.rooms - 1);
         const pos = exitPlatform.position ? exitPlatform.position : exitPlatform;
-
-        // Récupération de la position de spawn de la salle actuelle
         const playerSpawn = this.currentRoom ? this.currentRoom.spawnPosition : null;
 
         if (isLastRoom) {
-            if (this.currentFloor < 5) {
+            // Si on n'est PAS à l'étage du boss, portail d'étage classique
+            if (!FloorConfig.isBossFloor(this.currentFloor)) {
                 this.roomManager.createFloorPortal(pos);
             } else {
+                // Si on est à l'étage du boss, on prépare la sortie finale
                 this.bossExitPosition = pos;
             }
         } else {
-            // Transmission du playerSpawn pour l'orientation
             this.roomManager.createRoomPortal(pos, roomIndex + 1, playerSpawn);
         }
     }
@@ -207,8 +206,6 @@ export class LevelManager {
     }
 
     checkExitInteraction(player, entityManager, aiData) {
-        // ✅ Empêche de quitter la salle si on vient de spawn
-
         if (Date.now() < this.spawnProtectionTime) return;
 
         if (this.checkPortalInteraction(player, entityManager, aiData)) return;
@@ -220,8 +217,8 @@ export class LevelManager {
                 aiData.recordRoomCompletion(entityManager.getEnemyCount());
             }
 
-            if (this.currentFloor < 5) {
-                // ✅ Passage à l'étage suivant via méthode centralisée
+            // Vérification dynamique au lieu du "this.currentFloor < 5"
+            if (!FloorConfig.isBossFloor(this.currentFloor)) {
                 this.loadFloor(this.currentFloor + 1, player, aiData);
             } else if (this.onGameWon) {
                 this.onGameWon();
