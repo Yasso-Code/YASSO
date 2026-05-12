@@ -3,7 +3,7 @@
 Projet pour le concours Games on Web (IA Edition).
 
 ## Installation
-1. Clonez le dépôt ( branche develop ). Le main sera utilisé quand tout sera bon.
+1. Clonez le dépôt ( branche develop ). Le main sera utilisé quand tout sera bon ( finalisé ).
 2. Installez les dépendances : `npm install`
 
 ## Lancer le projet
